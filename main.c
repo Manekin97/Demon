@@ -78,8 +78,8 @@ int MmapCopy(char * srcPath, char * destPath) {
     return 0; 
 }
 
-int Copy(char * srcPath, char * destPath) {
-    char * buffer = malloc(sizeof(char) * BUFFER_SIZE); 
+int Copy(char *srcPath, char *destPath) {
+    char *buffer = malloc(sizeof(char) * BUFFER_SIZE); 
 
     int source = open(srcPath, O_RDONLY); 
     if (source == -1) {
@@ -96,10 +96,10 @@ int Copy(char * srcPath, char * destPath) {
     while ((bytesRead = read(source, buffer, BUFFER_SIZE)) != 0) {
         if (bytesRead == -1) {
             if (errno == EINTR) {
-            continue; 
-        }
+                continue; 
+            }
 
-        return -1; 
+            return -1; 
         }
 
         bytesWritten = write(destination, buffer, bytesRead); 
@@ -188,8 +188,8 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = NULL;
-    struct stat *destFileInfo = NULL;    
+    struct stat *srcFileInfo = malloc(sizeof(stat));
+    struct stat *destFileInfo = malloc(sizeof(stat)); 
 
     List *srcDirFiles = InitList();
     List *destDirFiles = InitList();
@@ -200,7 +200,7 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     struct utimbuf *newTime = NULL;
 
-    realpath(srcPath, resolvedPath);   
+    realpath(srcPath, resolvedPath);   //to potem wyjebać
     source = opendir(resolvedPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
@@ -233,13 +233,13 @@ void DirSync(const char *srcPath, const char *destPath) {
             if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) {
                 sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), srcDirInfo->d_name);
                 if (stat(fullSrcFilePath, srcFileInfo) == -1) {
-                    syslog(LOG_INFO, "stat(): Could not get information about %s", fullSrcFilePath); 
+                    syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
                     exit(EXIT_FAILURE);
                 }
 
                 sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), srcDirInfo->d_name);
                 if (stat(fullDestFilePath, destFileInfo) == -1) {
-                    syslog(LOG_INFO, "stat(): Could not get information about %s", fullDestFilePath); 
+                    syslog(LOG_INFO, "stat(): %s", strerror(errno));
                     exit(EXIT_FAILURE);
                 }
 
@@ -281,12 +281,14 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     while(currentSrc != NULL) { 
         sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);    
-        sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentSrc->fileName);    
+        sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentSrc->fileName); 
+        syslog(LOG_INFO, "fullSrcFilePath przed stat=%s", fullSrcFilePath);  
         if (stat(fullSrcFilePath, srcFileInfo) == -1) {
-            syslog(LOG_INFO, "stat(): Could not get information about %s", fullSrcFilePath); 
+            syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
             exit(EXIT_FAILURE);
         }
-
+        syslog(LOG_INFO, "fullSrcFilePath po stat=%s", fullSrcFilePath);   //usuwa mi kurwa stringa XD         
+        
         if(srcFileInfo->st_size < fileSizeThreshHold) {
             if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
                 syslog(LOG_INFO, "Copy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath);                 
