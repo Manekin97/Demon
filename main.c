@@ -188,8 +188,8 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = malloc(sizeof(stat));    //valgrind mowi to
-    struct stat *destFileInfo = malloc(sizeof(stat)); 
+    struct stat *srcFileInfo = malloc(sizeof(struct stat));    //valgrind mowi to
+    struct stat *destFileInfo = malloc(sizeof(struct stat)); 
 
     List *srcDirFiles = InitList();
     List *destDirFiles = InitList();
@@ -198,10 +198,9 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
-    struct utimbuf *newTime = NULL;
+    struct utimbuf *newTime = malloc(sizeof(struct utimebuf));
 
-    realpath(srcPath, resolvedPath);   //to potem usunac
-    source = opendir(resolvedPath);
+    source = opendir(srcPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
         exit(EXIT_FAILURE); 
