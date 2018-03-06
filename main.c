@@ -19,9 +19,10 @@
 #include "list.c"
 
 #define BUFFER_SIZE 131072
+#define MAX_SLEEP_TIME 86400
 
 int fileSizeThreshHold = 4096; 
-int sleepInterval = 600; 
+int sleepInterval = 300; 
 bool recursiveSearch = false; 
 
 int MmapCopy(char *srcPath, char *destPath) {
@@ -332,8 +333,14 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(newTime);
 }
 
+void RecursiveDirSync(const char *srcPath, const char *destPath) {
+
+}
+
 void Sigusr1Handler(int signo) {
-    printf("Process was awakened"); //  To powinno iść do logu
+    time_t *currentTime = NULL;
+    time(currentTime);
+    syslog(LOG_INFO, "<%s> Process was awakened by signal SIGUSR1", asctime(gmtime(currentTime)));
 }
 
 int main(int argc, char * const argv[]) {
@@ -344,7 +351,7 @@ int main(int argc, char * const argv[]) {
     struct stat destDirInfo = malloc(sizeof(struct stat));
 
     if (signal(SIGUSR1, &Sigusr1Handler) == SIG_ERR) {
-        printf("Signal SIGUSR1 could not be handled"); //a nie perror?
+        perror("singal()");
         exit(EXIT_FAILURE); 
     }
 
@@ -355,14 +362,18 @@ int main(int argc, char * const argv[]) {
                 fileSizeThreshHold = atoi(optarg); 
                 break; 
             case 'i':
-                sleepInterval = atoi(optarg); 
+                sleepInterval = atoi(optarg);
+                if(sleepInterval > MAX_SLEEP_TIME) {
+                    sleepInterval = MAX_SLEEP_TIME;
+                }
+                
                 break; 
             case 'R':
                 recursiveSearch = true; 
                 break; 
             case '?':
                 printf("Wrong Arguments\n"); 
-                return-1; 
+                return -1; 
         }
     }
 
@@ -379,7 +390,14 @@ int main(int argc, char * const argv[]) {
     // Daemonize(); 
  
     while (1) { 
-        DirSync(srcPath, destPath);
+        if(recursiveSearch) {
+            DirSync(srcPath, destPath);
+        }
+        else {
+            RecursiveDirSync(srcPath, destPath);
+        }
+
+        syslog(LOG_INFO, "Daemon is went to sleep for %d s", sleepInterval);
         sleep(sleepInterval); 
     }
 
