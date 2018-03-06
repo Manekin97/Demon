@@ -45,7 +45,7 @@ int MmapCopy(char *srcPath, char *destPath) {
     else {
         fileSize = fileInfo.st_size; 
     }
-
+    syslog(LOG_INFO, "fileSize=%d", fileSize);
     int * srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0); 
     if (srcAddress == MAP_FAILED) {
         return -1; 
