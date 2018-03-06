@@ -187,7 +187,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = malloc(sizeof(struct stat));    //valgrind mowi to
+    struct stat *srcFileInfo = malloc(sizeof(struct stat));
     struct stat *destFileInfo = malloc(sizeof(struct stat)); 
 
     List *srcDirFiles = InitList();
@@ -198,7 +198,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
     time_t *currentTime = NULL;    
-    struct utimbuf *newTime = malloc(sizeof(struct utimebuf));
+    struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
 
     source = opendir(srcPath);
     if (!source) {
@@ -345,8 +345,8 @@ int main(int argc, char * const argv[]) {
     const char *srcPath = argv[1]; 
     const char *destPath = argv[2]; 
 
-    struct stat srcDirInfo = malloc(sizeof(struct stat));
-    struct stat destDirInfo = malloc(sizeof(struct stat));
+    struct stat *srcDirInfo = malloc(sizeof(struct stat));
+    struct stat *destDirInfo = malloc(sizeof(struct stat));
 
     if (signal(SIGUSR1, &Sigusr1Handler) == SIG_ERR) {
         perror("singal()");
@@ -376,19 +376,19 @@ int main(int argc, char * const argv[]) {
     }
 
     if(stat(srcPath, srcDirInfo) == -1) {
-        perror(errno);
+        perror("stat");
         exit(EXIT_FAILURE);
     }
     
     if(stat(destPath, destDirInfo) == -1) {
-        perror(errno);
+        perror("stat");
         exit(EXIT_FAILURE);
     }
 
-    // Daemonize(); 
+    Daemonize(); 
  
     while (1) { 
-        if(recursiveSearch) {
+        if(!recursiveSearch) {
             DirSync(srcPath, destPath);
         }
         else {
@@ -399,6 +399,8 @@ int main(int argc, char * const argv[]) {
         sleep(sleepInterval); 
     }
 
+    free(srcDirInfo);
+    free(destDirInfo);
     return 0; 
 }
 
