@@ -197,6 +197,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
+    time_t *currentTime = NULL;    
     struct utimbuf *newTime = malloc(sizeof(struct utimebuf));
 
     source = opendir(srcPath);
@@ -256,7 +257,6 @@ void DirSync(const char *srcPath, const char *destPath) {
                     }
 
                     //  To potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać currentSrc
-                    time_t *currentTime = NULL;
                     time(currentTime);
                     newTime->actime = *currentTime;
                     newTime->modtime = *currentTime;
@@ -300,7 +300,6 @@ void DirSync(const char *srcPath, const char *destPath) {
             }
         }
 
-        time_t *currentTime = NULL;
         time(currentTime);
         syslog(LOG_INFO, "<%s>: %s has been copied to %s", asctime(gmtime(currentTime)), fullSrcFilePath, fullDestFilePath);                         
     }
@@ -312,7 +311,6 @@ void DirSync(const char *srcPath, const char *destPath) {
             exit(EXIT_FAILURE);
         }
 
-        time_t *currentTime = NULL;
         time(currentTime);
         syslog(LOG_INFO, "<%s>: %s has been removed", asctime(gmtime(currentTime)), fullDestFilePath);                                         
     }
@@ -366,7 +364,7 @@ int main(int argc, char * const argv[]) {
                 if(sleepInterval > MAX_SLEEP_TIME) {
                     sleepInterval = MAX_SLEEP_TIME;
                 }
-                
+
                 break; 
             case 'R':
                 recursiveSearch = true; 
@@ -397,7 +395,7 @@ int main(int argc, char * const argv[]) {
             RecursiveDirSync(srcPath, destPath);
         }
 
-        syslog(LOG_INFO, "Daemon is went to sleep for %d s", sleepInterval);
+        syslog(LOG_INFO, "Daemon went to sleep for %d s", sleepInterval);
         sleep(sleepInterval); 
     }
 
@@ -405,6 +403,5 @@ int main(int argc, char * const argv[]) {
 }
 
 //  @TODO
-//  Dodać syslogi
-//  Dodać sprawdzanie w DirSync(), czy pliki sa zwykle (ma pomijać katalogi i inne gówna, które nie są plikami)
+//  Poprawić syslogi
 //  Dodac rekurencyjne przeszukiwanie katalogów
