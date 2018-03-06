@@ -45,20 +45,22 @@ int MmapCopy(char *srcPath, char *destPath) {
     else {
         fileSize = fileInfo.st_size; 
     }
-    syslog(LOG_INFO, "fileSize=%d", fileSize);
-    int * srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0); 
+
+    int *srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0); 
     if (srcAddress == MAP_FAILED) {
         return -1; 
     }
 
-    ftruncate(destination, fileSize); 
+    if(ftruncate(destination, fileSize)) {
+        return -1;
+    } 
 
-    int * destAddress = mmap(NULL, fileSize, PROT_READ | PROT_WRITE, MAP_SHARED, destination, 0); 
+    int *destAddress = mmap(NULL, fileSize, PROT_READ | PROT_WRITE, MAP_SHARED, destination, 0); 
     if (destAddress == MAP_FAILED) { 
         return -1; 
     }
 
-    memcpy(srcAddress, destAddress, fileSize); 
+    memcpy(destAddress, srcAddress, fileSize);
     
     if (munmap(srcAddress, fileSize) == -1) {
         return -1; 
@@ -187,7 +189,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = malloc(sizeof(struct stat));    //valgrind mowi to
+    struct stat *srcFileInfo = malloc(sizeof(struct stat));
     struct stat *destFileInfo = malloc(sizeof(struct stat)); 
 
     List *srcDirFiles = InitList();
@@ -197,8 +199,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
-    time_t *currentTime = NULL;    
-    struct utimbuf *newTime = malloc(sizeof(struct utimebuf));
+    char *tmp = NULL;
 
     source = opendir(srcPath);
     if (!source) {
@@ -230,13 +231,14 @@ void DirSync(const char *srcPath, const char *destPath) {
     while(currentSrc != NULL) {
         while(currentDest != NULL) {
             if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) {
-                sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), srcDirInfo->d_name);
+                sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);
+                sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentDest->fileName);
+                
                 if (stat(fullSrcFilePath, srcFileInfo) == -1) {
                     syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
                     exit(EXIT_FAILURE);
                 }
 
-                sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), srcDirInfo->d_name);
                 if (stat(fullDestFilePath, destFileInfo) == -1) {
                     syslog(LOG_INFO, "stat(): %s", strerror(errno));
                     exit(EXIT_FAILURE);
@@ -256,14 +258,10 @@ void DirSync(const char *srcPath, const char *destPath) {
                         }
                     }
 
-                    //  To potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać currentSrc
-                    time(currentTime);
-                    newTime->actime = *currentTime;
-                    newTime->modtime = *currentTime;
-                    utime(fullDestFilePath, newTime);
-                    syslog(LOG_INFO, "<%s>: %s has been copied to %s", asctime(gmtime(currentTime)), fullSrcFilePath, fullDestFilePath);                     
-                    Remove(currentSrc->fileName, srcDirFiles);
-                    Remove(currentDest->fileName, destDirFiles);
+                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);    
+                    // Remove(currentDest->fileName, destDirFiles);     // tu jest problem, jak usune z listy, to nie bedzie moglo 
+                    // Remove(currentSrc->fileName, srcDirFiles);       // currentDest = currentDest->next, bo nie istnieje taki element, 
+                                                                        // jak wykomentuje remove, to prostu zawsze mi usunie skopiowane pliki
                     break;
                 }
             }
@@ -280,18 +278,16 @@ void DirSync(const char *srcPath, const char *destPath) {
     while(currentSrc != NULL) { 
         sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);    
         sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentSrc->fileName); 
-        syslog(LOG_INFO, "fullSrcFilePath przed stat=%s", fullSrcFilePath);  
         if (stat(fullSrcFilePath, srcFileInfo) == -1) {
             syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
             exit(EXIT_FAILURE);
-        }
-        syslog(LOG_INFO, "fullSrcFilePath po stat=%s", fullSrcFilePath);   //usuwa mi stringa      
+        }     
         
         if(srcFileInfo->st_size < fileSizeThreshHold) {
             if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
                 syslog(LOG_INFO, "Copy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath);                 
                 exit(EXIT_FAILURE);
-            }
+            }            
         }
         else {
             if(MmapCopy(fullSrcFilePath, fullDestFilePath) == -1) {
@@ -300,8 +296,8 @@ void DirSync(const char *srcPath, const char *destPath) {
             }
         }
 
-        time(currentTime);
-        syslog(LOG_INFO, "<%s>: %s has been copied to %s", asctime(gmtime(currentTime)), fullSrcFilePath, fullDestFilePath);                         
+        syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
+        currentSrc = currentSrc->next;                       
     }
 
     while(currentDest != NULL) {
@@ -311,16 +307,17 @@ void DirSync(const char *srcPath, const char *destPath) {
             exit(EXIT_FAILURE);
         }
 
-        time(currentTime);
-        syslog(LOG_INFO, "<%s>: %s has been removed", asctime(gmtime(currentTime)), fullDestFilePath);                                         
+        syslog(LOG_INFO, "%s has been removed", fullDestFilePath);    
+
+        currentDest = currentDest->next;                                     
     }
 
     if(closedir(source) == -1) {
-        syslog(LOG_INFO, "<%s>: Could not close \"%s\"", asctime(gmtime(currentTime)), srcPath);
+        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
     }
 
     if(closedir(destination) == -1) {
-        syslog(LOG_INFO, "<%s>: Could not close \"%s\"", asctime(gmtime(currentTime)), destPath);
+        syslog(LOG_INFO, "Could not close \"%s\"", destPath);
     }
 
     free(srcFileInfo);
@@ -328,7 +325,6 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(fullSrcFilePath);
     free(fullDestFilePath);
     free(resolvedPath);
-    free(newTime);
 }
 
 void RecursiveDirSync(const char *srcPath, const char *destPath) {
@@ -345,8 +341,8 @@ int main(int argc, char * const argv[]) {
     const char *srcPath = argv[1]; 
     const char *destPath = argv[2]; 
 
-    struct stat srcDirInfo = malloc(sizeof(struct stat));
-    struct stat destDirInfo = malloc(sizeof(struct stat));
+    struct stat *srcDirInfo = malloc(sizeof(struct stat));
+    struct stat *destDirInfo = malloc(sizeof(struct stat));
 
     if (signal(SIGUSR1, &Sigusr1Handler) == SIG_ERR) {
         perror("singal()");
@@ -376,19 +372,19 @@ int main(int argc, char * const argv[]) {
     }
 
     if(stat(srcPath, srcDirInfo) == -1) {
-        perror(errno);
+        perror("stat");
         exit(EXIT_FAILURE);
     }
     
     if(stat(destPath, destDirInfo) == -1) {
-        perror(errno);
+        perror("stat");
         exit(EXIT_FAILURE);
     }
 
     // Daemonize(); 
  
     while (1) { 
-        if(recursiveSearch) {
+        if(!recursiveSearch) {
             DirSync(srcPath, destPath);
         }
         else {
@@ -399,9 +395,13 @@ int main(int argc, char * const argv[]) {
         sleep(sleepInterval); 
     }
 
+    free(srcDirInfo);
+    free(destDirInfo);
     return 0; 
 }
 
 //  @TODO
 //  Poprawić syslogi
 //  Dodac rekurencyjne przeszukiwanie katalogów
+// dm w src < dm w dest
+//  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
