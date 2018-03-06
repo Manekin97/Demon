@@ -188,7 +188,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = malloc(sizeof(stat));
+    struct stat *srcFileInfo = malloc(sizeof(stat));    //valgrind mowi to
     struct stat *destFileInfo = malloc(sizeof(stat)); 
 
     List *srcDirFiles = InitList();
@@ -200,7 +200,7 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     struct utimbuf *newTime = NULL;
 
-    realpath(srcPath, resolvedPath);   //to potem wyjebać
+    realpath(srcPath, resolvedPath);   //to potem usunac
     source = opendir(resolvedPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
@@ -287,7 +287,7 @@ void DirSync(const char *srcPath, const char *destPath) {
             syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
             exit(EXIT_FAILURE);
         }
-        syslog(LOG_INFO, "fullSrcFilePath po stat=%s", fullSrcFilePath);   //usuwa mi kurwa stringa XD         
+        syslog(LOG_INFO, "fullSrcFilePath po stat=%s", fullSrcFilePath);   //usuwa mi stringa      
         
         if(srcFileInfo->st_size < fileSizeThreshHold) {
             if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
@@ -351,7 +351,7 @@ int main(int argc, char * const argv[]) {
         }
     }
     
-    Daemonize(); 
+    // Daemonize(); 
  
     while (1) { 
         DirSync(srcPath, destPath);
