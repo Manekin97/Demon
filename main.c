@@ -24,7 +24,7 @@ int fileSizeThreshHold = 4096;
 int sleepInterval = 600; 
 bool recursiveSearch = false; 
 
-int MmapCopy(char * srcPath, char * destPath) {
+int MmapCopy(char *srcPath, char *destPath) {
     struct stat fileInfo; 
 
     int source = open(srcPath, O_RDONLY); 
@@ -38,7 +38,7 @@ int MmapCopy(char * srcPath, char * destPath) {
     }
 
     int fileSize; 
-    if (fstat(source,  & fileInfo) == -1) {
+    if (fstat(source, &fileInfo) == -1) {
         return -1; 
     }
     else {
@@ -133,7 +133,6 @@ void Daemonize() {
         exit(EXIT_FAILURE); 
     }
     else if (pid > 0) {
-        printf("Parent process has been terminated with succes\n");
         exit(EXIT_SUCCESS); 
     }
 
@@ -150,7 +149,6 @@ void Daemonize() {
         exit(EXIT_FAILURE); 
     }
     else if (pid > 0) {
-        printf("Parent process has been terminated with succes\n");
         exit(EXIT_SUCCESS); 
     }
 
@@ -317,6 +315,21 @@ void DirSync(const char *srcPath, const char *destPath) {
         time(currentTime);
         syslog(LOG_INFO, "<%s>: %s has been removed", asctime(gmtime(currentTime)), fullDestFilePath);                                         
     }
+
+    if(closedir(source) == -1) {
+        syslog(LOG_INFO, "<%s>: Could not close \"%s\"", asctime(gmtime(currentTime)), srcPath);
+    }
+
+    if(closedir(destination) == -1) {
+        syslog(LOG_INFO, "<%s>: Could not close \"%s\"", asctime(gmtime(currentTime)), destPath);
+    }
+
+    free(srcFileInfo);
+    free(destFileInfo);
+    free(fullSrcFilePath);
+    free(fullDestFilePath);
+    free(resolvedPath);
+    free(newTime);
 }
 
 void Sigusr1Handler(int signo) {
@@ -324,10 +337,13 @@ void Sigusr1Handler(int signo) {
 }
 
 int main(int argc, char * const argv[]) {
-    const char * srcPath = argv[1]; 
-    const char * destPath = argv[2]; 
+    const char *srcPath = argv[1]; 
+    const char *destPath = argv[2]; 
 
-    if (signal(SIGUSR1,  &Sigusr1Handler) == SIG_ERR) {
+    struct stat srcDirInfo = malloc(sizeof(struct stat));
+    struct stat destDirInfo = malloc(sizeof(struct stat));
+
+    if (signal(SIGUSR1, &Sigusr1Handler) == SIG_ERR) {
         printf("Signal SIGUSR1 could not be handled"); //a nie perror?
         exit(EXIT_FAILURE); 
     }
@@ -349,7 +365,17 @@ int main(int argc, char * const argv[]) {
                 return-1; 
         }
     }
+
+    if(stat(srcPath, srcDirInfo) == -1) {
+        perror(errno);
+        exit(EXIT_FAILURE);
+    }
     
+    if(stat(destPath, destDirInfo) == -1) {
+        perror(errno);
+        exit(EXIT_FAILURE);
+    }
+
     // Daemonize(); 
  
     while (1) { 
