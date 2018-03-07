@@ -201,6 +201,7 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     bool found = false;
     Node *tmp = malloc(sizeof(struct node));
+    struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
 
     source = opendir(srcPath);
     if (!source) {
@@ -260,6 +261,9 @@ void DirSync(const char *srcPath, const char *destPath) {
                     }
 
                     found = true;
+                    newTime->actime = srcFileInfo->st_atime;
+                    newTime->modtime = srcFileInfo->st_mtime;
+                    utime(fullDestFilePath, newTime);
                     syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
                 }
             }
