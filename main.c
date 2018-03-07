@@ -199,7 +199,8 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
-    char *tmp = NULL;
+    bool found = false;
+    node *tmp = malloc(sizeof(struct node));
 
     source = opendir(srcPath);
     if (!source) {
@@ -258,18 +259,30 @@ void DirSync(const char *srcPath, const char *destPath) {
                         }
                     }
 
-                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);    
-                    // Remove(currentDest->fileName, destDirFiles);     // tu jest problem, jak usune z listy, to nie bedzie moglo 
-                    // Remove(currentSrc->fileName, srcDirFiles);       // currentDest = currentDest->next, bo nie istnieje taki element, 
-                                                                        // jak wykomentuje remove, to prostu zawsze mi usunie skopiowane pliki
-                    break;
+                    found = true;
+                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
                 }
             }
 
-            currentDest = currentDest->next;
+            if(found) {
+                Remove(currentDest->fileName, destDirFiles);
+                currentDest = destDirFiles->head;                
+                break;
+            }
+            else {
+                currentDest = currentDest->next;
+            }
         }
 
-        currentSrc = currentSrc->next;
+        if(found) {
+            tmp = currentSrc->next;
+            Remove(currentSrc->fileName, srcDirFiles);
+            found = false;
+            currentSrc = tmp;
+        }
+        else {
+            currentSrc = currentSrc->next;
+        }
     }
 
     currentSrc = srcDirFiles->head;
