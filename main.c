@@ -200,7 +200,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
     bool found = false;
-    node *tmp = malloc(sizeof(struct node));
+    Node *tmp = malloc(sizeof(struct node));
 
     source = opendir(srcPath);
     if (!source) {
@@ -345,9 +345,7 @@ void RecursiveDirSync(const char *srcPath, const char *destPath) {
 }
 
 void Sigusr1Handler(int signo) {
-    time_t *currentTime = NULL;
-    time(currentTime);
-    syslog(LOG_INFO, "<%s> Process was awakened by signal SIGUSR1", asctime(gmtime(currentTime)));
+    syslog(LOG_INFO, "Daemon was awakened by signal SIGUSR1");
 }
 
 int main(int argc, char * const argv[]) {
@@ -394,7 +392,17 @@ int main(int argc, char * const argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Daemonize(); 
+    if(!S_ISDIR(srcDirInfo->st_mode)) {
+        printf("\"%s\" is not a directory", srcPath);
+        exit(EXIT_FAILURE);
+    }
+
+    if(!S_ISDIR(destDirInfo->st_mode)) {
+        printf("\"%s\" is not a directory", destPath);
+        exit(EXIT_FAILURE);
+    }
+
+    Daemonize(); 
  
     while (1) { 
         if(!recursiveSearch) {
