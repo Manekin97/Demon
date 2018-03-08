@@ -145,20 +145,37 @@ int Copy(char *srcPath, char *destPath, struct stat *srcFileInfo) {
     }
 }
 
+char *AppendFileNameToPath(char *path, char *filename) {
+    char *newPath = malloc(PATH_MAX * sizeof(char));
+    if(sprintf(newPath, "%s/%s", path, filename) == -1) {
+        syslog(LOG_INFO, "sprintf(): Error appending filename");
+        exit(EXIT_FAILURE);
+    }
+
+    return newPath;
+}
+
+struct stat *GetFileInfo(char *path) {
+    struct stat *fileInfo = malloc(sizeof(struct stat));
+    
+    if (stat(path, fileInfo) == -1) {
+        syslog(LOG_INFO, "stat(): %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    return fileInfo;
+}
+
 int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
-    char *fullSrcFilePath = malloc(PATH_MAX * sizeof(char));
-    char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
-    char *resolvedPath = malloc(PATH_MAX * sizeof(char));
-    struct stat *fileInfo = malloc(sizeof(struct stat));    
+    char *fullSrcFilePath = NULL;
+    char *fullDestFilePath = NULL;
+    struct stat *fileInfo = NULL;    
     
     Node *current = list->head;
     while(current != NULL) { 
-        sprintf(fullSrcFilePath, "%s/%s", realpath(srcDir, resolvedPath), current->fileName);    
-        sprintf(fullDestFilePath, "%s/%s", realpath(destDir, resolvedPath), current->fileName); 
-        if (stat(fullSrcFilePath, fileInfo) == -1) {
-            syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
-            exit(EXIT_FAILURE);
-        }     
+        fullSrcFilePath = AppendFileNameToPath(srcDir, current->fileName);
+        fullDestFilePath = AppendFileNameToPath(destDir, current->fileName);        
+        fileInfo = GetFileInfo(fullSrcFilePath);    
         
         Copy(fullSrcFilePath, fullDestFilePath, fileInfo);
 
@@ -168,16 +185,15 @@ int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
 
     free(fullSrcFilePath);
     free(fullDestFilePath);
-    free(resolvedPath);
     free(fileInfo);    
 }
 
 int RemoveAllFilesFromList(List *list, char *path) {
-    char *fullPath = malloc(PATH_MAX * sizeof(char));
+    char *fullPath = NULL;
     
     Node *current = list->head;
     while(current != NULL) {
-        sprintf(fullPath, "%s/%s", realpath(path, resolvedPath), current->fileName);            
+        fullPath = AppendFileNameToPath(path, current->fileName);           
         if(remove(fullPath) == -1) {
             syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);                 
             exit(EXIT_FAILURE);
@@ -199,17 +215,6 @@ int SyncModTime(struct stat *fileInfo, char *destPath) {
     }
 }
 
-struct stat *GetFileInfo(char *path) {
-    struct stat *fileInfo = malloc(sizeof(struct stat));
-    
-    if (stat(path, fileInfo) == -1) {
-        syslog(LOG_INFO, "stat(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    return fileInfo;
-}
-
 List *GetAllFileNamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
     List *list = InitList();
     struct dirent *dirInfo = NULL;
@@ -228,16 +233,6 @@ List *GetAllFileNamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
     }   
 
     return list;
-}
-
-char *AppendFileNameToPath(char *path, char *filename) {
-    char *newPath = malloc(PATH_MAX * sizeof(char));
-    if(sprintf(newPath, "%s/%s", path, filename) == -1) {
-        syslog(LOG_INFO, "sprintf(): Error appending filename");
-        exit(EXIT_FAILURE);
-    }
-
-    return newPath;
 }
 
 void Daemonize() {
