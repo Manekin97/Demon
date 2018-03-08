@@ -232,7 +232,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     Node *currentDest = destDirFiles->head;
     while(currentSrc != NULL) {
         while(currentDest != NULL) {
-            if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) {
+            if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) { 
                 sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);
                 sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentDest->fileName);
                 
@@ -246,7 +246,7 @@ void DirSync(const char *srcPath, const char *destPath) {
                     exit(EXIT_FAILURE);
                 }
 
-                if(srcFileInfo->st_mtime > destFileInfo->st_mtime) {
+                if(srcFileInfo->st_mtime > destFileInfo->st_mtime) { // jak nie to tylko usunac z listy
                     if(srcFileInfo->st_size < fileSizeThreshHold) {
                         if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
                             syslog(LOG_INFO, "Copy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath); 
@@ -264,14 +264,22 @@ void DirSync(const char *srcPath, const char *destPath) {
                     newTime->actime = srcFileInfo->st_atime;
                     newTime->modtime = srcFileInfo->st_mtime;
                     if(utime(fullDestFilePath, newTime) == -1) {
-                        syslog(strerror(errno));
+                        syslog(LOG_INFO, "utime(): %s", strerror(errno));
                     }
                     syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
+                }
+                else {
+                    Remove(currentDest->fileName, destDirFiles);
+                    syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);                   
+                    currentDest = destDirFiles->head;  
+                    found = true;              
+                    break;
                 }
             }
 
             if(found) {
                 Remove(currentDest->fileName, destDirFiles);
+                syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);                   
                 currentDest = destDirFiles->head;                
                 break;
             }
@@ -283,12 +291,28 @@ void DirSync(const char *srcPath, const char *destPath) {
         if(found) {
             tmp = currentSrc->next;
             Remove(currentSrc->fileName, srcDirFiles);
+            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", currentSrc->fileName);                               
             found = false;
             currentSrc = tmp;
         }
         else {
             currentSrc = currentSrc->next;
         }
+    }
+
+    currentSrc = srcDirFiles->head;
+    currentDest = destDirFiles->head;
+
+    syslog(LOG_INFO, "currentSrc:");
+    while(currentSrc != NULL) {
+        syslog(LOG_INFO, "%s", currentSrc->fileName);
+        currentSrc = currentSrc->next;        
+    }
+
+    syslog(LOG_INFO, "currentDest:");
+    while(currentDest != NULL) {
+        syslog(LOG_INFO, "%s", currentDest->fileName);
+        currentDest = currentDest->next;        
     }
 
     currentSrc = srcDirFiles->head;
