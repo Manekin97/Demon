@@ -263,7 +263,9 @@ void DirSync(const char *srcPath, const char *destPath) {
                     found = true;
                     newTime->actime = srcFileInfo->st_atime;
                     newTime->modtime = srcFileInfo->st_mtime;
-                    utime(fullDestFilePath, newTime);
+                    if(utime(fullDestFilePath, newTime) == -1) {
+                        syslog(strerror(errno));
+                    }
                     syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
                 }
             }
