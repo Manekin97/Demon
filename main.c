@@ -25,6 +25,9 @@ int fileSizeThreshHold = 4096;
 int sleepInterval = 300; 
 bool recursiveSearch = false; 
 
+// funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
+// czy potrzebne jest realpath? chyba nie
+
 int MmapCopy(char *srcPath, char *destPath) {
     struct stat fileInfo; 
 
@@ -81,7 +84,7 @@ int MmapCopy(char *srcPath, char *destPath) {
     return 0; 
 }
 
-int Copy(char *srcPath, char *destPath) {
+int RegularCopy(char *srcPath, char *destPath) {
     char *buffer = malloc(sizeof(char) * BUFFER_SIZE); 
 
     int source = open(srcPath, O_RDONLY); 
@@ -125,6 +128,116 @@ int Copy(char *srcPath, char *destPath) {
 
     free(buffer); 
     return 0; 
+}
+
+int Copy(char *srcPath, char *destPath, struct stat *srcFileInfo) {
+    if (srcFileInfo->st_size < fileSizeThreshHold) {
+        if (RegularCopy(srcPath, destPath) == -1) {
+            syslog(LOG_INFO, "RegularCopy(): Could not copy %s to %s", srcPath, destPath);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else {
+        if (MmapCopy(srcPath, destPath) == -1) {
+            syslog(LOG_INFO, "MmapCopy(): Could not copy %s to %s", srcPath, destPath);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
+    char *fullSrcFilePath = malloc(PATH_MAX * sizeof(char));
+    char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
+    char *resolvedPath = malloc(PATH_MAX * sizeof(char));
+    struct stat *fileInfo = malloc(sizeof(struct stat));    
+    
+    Node *current = list->head;
+    while(current != NULL) { 
+        sprintf(fullSrcFilePath, "%s/%s", realpath(srcDir, resolvedPath), current->fileName);    
+        sprintf(fullDestFilePath, "%s/%s", realpath(destDir, resolvedPath), current->fileName); 
+        if (stat(fullSrcFilePath, fileInfo) == -1) {
+            syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
+            exit(EXIT_FAILURE);
+        }     
+        
+        Copy(fullSrcFilePath, fullDestFilePath, fileInfo);
+
+        syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
+        current = current->next;                       
+    }
+
+    free(fullSrcFilePath);
+    free(fullDestFilePath);
+    free(resolvedPath);
+    free(fileInfo);    
+}
+
+int RemoveAllFilesFromList(List *list, char *path) {
+    char *fullPath = malloc(PATH_MAX * sizeof(char));
+    
+    Node *current = list->head;
+    while(current != NULL) {
+        sprintf(fullPath, "%s/%s", realpath(path, resolvedPath), current->fileName);            
+        if(remove(fullPath) == -1) {
+            syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);                 
+            exit(EXIT_FAILURE);
+        }
+
+        syslog(LOG_INFO, "%s has been removed", fullPath);    
+        current = current->next;                                     
+    }
+}
+
+int SyncModTime(struct stat *fileInfo, char *destPath) {
+    struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
+    time_t *t = malloc(sizeof(time_t));
+    
+    newTime->actime = time(t);
+    newTime->modtime = fileInfo->st_mtime;
+    if (utime(destPath, newTime) == -1) {
+        syslog(LOG_INFO, "utime(): %s", strerror(errno));
+    }
+}
+
+struct stat *GetFileInfo(char *path) {
+    struct stat *fileInfo = malloc(sizeof(struct stat));
+    
+    if (stat(path, fileInfo) == -1) {
+        syslog(LOG_INFO, "stat(): %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    return fileInfo;
+}
+
+List *GetAllFileNamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
+    List *list = InitList();
+    struct dirent *dirInfo = NULL;
+
+    if(ignoreNonRegFiles) {
+        while ((dirInfo = readdir(dir)) != NULL) {
+            if(dirInfo->d_type == DT_REG){
+                Append(dirInfo->d_name, list);
+            }
+        }
+    }
+    else {
+        while ((dirInfo = readdir(dir)) != NULL) {
+            Append(dirInfo->d_name, list);
+        }
+    }   
+
+    return list;
+}
+
+char *AppendFileNameToPath(char *path, char *filename) {
+    char *newPath = malloc(PATH_MAX * sizeof(char));
+    if(sprintf(newPath, "%s/%s", path, filename) == -1) {
+        syslog(LOG_INFO, "sprintf(): Error appending filename");
+        exit(EXIT_FAILURE);
+    }
+
+    return newPath;
 }
 
 void Daemonize() {
@@ -189,86 +302,48 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct dirent *srcDirInfo = NULL; 
     struct dirent *destDirInfo = NULL;
 
-    struct stat *srcFileInfo = malloc(sizeof(struct stat));
-    struct stat *destFileInfo = malloc(sizeof(struct stat)); 
+    struct stat *srcFileInfo = NULL;
+    struct stat *destFileInfo = NULL;
 
-    List *srcDirFiles = InitList();
-    List *destDirFiles = InitList();
-
-    char *fullSrcFilePath = malloc(PATH_MAX * sizeof(char));
-    char *fullDestFilePath = malloc(PATH_MAX * sizeof(char));
+    char *fullSrcFilePath = NULL;
+    char *fullDestFilePath = NULL;
     char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
     bool found = false;
     Node *tmp = malloc(sizeof(struct node));
-    struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
 
     source = opendir(srcPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
         exit(EXIT_FAILURE); 
     }
-
-    realpath(destPath, resolvedPath); 
+ 
     destination = opendir(resolvedPath); 
     if (!destination) {
         syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
         exit(EXIT_FAILURE); 
     }
 
-    while ((srcDirInfo = readdir(source)) != NULL) {
-        if(srcDirInfo->d_type == DT_REG){
-            Append(srcDirInfo->d_name, srcDirFiles);
-        }
-    }
-
-    while ((destDirInfo = readdir(destination)) != NULL) {
-        if(destDirInfo->d_type == DT_REG) {
-            Append(destDirInfo->d_name, destDirFiles);
-        }
-    }
+    List *srcDirFiles = GetAllFileNamesFromDir(source, true);
+    List *destDirFiles = GetAllFileNamesFromDir(destination, true);
 
     Node *currentSrc = srcDirFiles->head;
     Node *currentDest = destDirFiles->head;
     while(currentSrc != NULL) {
         while(currentDest != NULL) {
             if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) { 
-                sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);
-                sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentDest->fileName);
+                fullSrcFilePath = AppendFileNameToPath(realpath(srcPath, resolvedPath), currentSrc->fileName);
+                fullDestFilePath = AppendFileNameToPath(realpath(destPath, resolvedPath), currentDest->fileName);
                 
-                if (stat(fullSrcFilePath, srcFileInfo) == -1) {
-                    syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
-                    exit(EXIT_FAILURE);
-                }
+                srcFileInfo = GetFileInfo(fullSrcFilePath);
+                destFileInfo = GetFileInfo(fullDestFilePath);
 
-                if (stat(fullDestFilePath, destFileInfo) == -1) {
-                    syslog(LOG_INFO, "stat(): %s", strerror(errno));
-                    exit(EXIT_FAILURE);
-                }
-
-                if(srcFileInfo->st_mtime > destFileInfo->st_mtime) { // jak nie to tylko usunac z listy
-                    if(srcFileInfo->st_size < fileSizeThreshHold) {
-                        if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
-                            syslog(LOG_INFO, "Copy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath); 
-                            exit(EXIT_FAILURE);
-                        }
-                    }
-                    else {
-                        if(MmapCopy(fullSrcFilePath, fullDestFilePath) == -1) {
-                            syslog(LOG_INFO, "MmapCopy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath); 
-                            exit(EXIT_FAILURE);
-                        }
-                    }
-
-                    found = true;
-                    newTime->actime = srcFileInfo->st_atime;
-                    newTime->modtime = srcFileInfo->st_mtime;
-                    if(utime(fullDestFilePath, newTime) == -1) {
-                        syslog(LOG_INFO, "utime(): %s", strerror(errno));
-                    }
+                if(srcFileInfo->st_mtime > destFileInfo->st_mtime) {
+                    Copy(fullSrcFilePath, fullDestFilePath, srcFileInfo);
+                    SyncModTime(srcFileInfo, fullDestFilePath);
                     syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
                 }
-                else {
+                else { // jak nie to tylko usunac z listy
                     Remove(currentDest->fileName, destDirFiles);
                     syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);                   
                     currentDest = destDirFiles->head;  
@@ -300,60 +375,23 @@ void DirSync(const char *srcPath, const char *destPath) {
         }
     }
 
-    currentSrc = srcDirFiles->head;
-    currentDest = destDirFiles->head;
+    // currentSrc = srcDirFiles->head;
+    // currentDest = destDirFiles->head;
 
-    syslog(LOG_INFO, "currentSrc:");
-    while(currentSrc != NULL) {
-        syslog(LOG_INFO, "%s", currentSrc->fileName);
-        currentSrc = currentSrc->next;        
-    }
+    // syslog(LOG_INFO, "currentSrc:");
+    // while(currentSrc != NULL) {
+    //     syslog(LOG_INFO, "%s", currentSrc->fileName);
+    //     currentSrc = currentSrc->next;        
+    // }
 
-    syslog(LOG_INFO, "currentDest:");
-    while(currentDest != NULL) {
-        syslog(LOG_INFO, "%s", currentDest->fileName);
-        currentDest = currentDest->next;        
-    }
+    // syslog(LOG_INFO, "currentDest:");
+    // while(currentDest != NULL) {
+    //     syslog(LOG_INFO, "%s", currentDest->fileName);
+    //     currentDest = currentDest->next;        
+    // }
 
-    currentSrc = srcDirFiles->head;
-    currentDest = destDirFiles->head;
-
-    while(currentSrc != NULL) { 
-        sprintf(fullSrcFilePath, "%s/%s", realpath(srcPath, resolvedPath), currentSrc->fileName);    
-        sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentSrc->fileName); 
-        if (stat(fullSrcFilePath, srcFileInfo) == -1) {
-            syslog(LOG_INFO, "stat(): %s", strerror(errno)); 
-            exit(EXIT_FAILURE);
-        }     
-        
-        if(srcFileInfo->st_size < fileSizeThreshHold) {
-            if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
-                syslog(LOG_INFO, "Copy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath);                 
-                exit(EXIT_FAILURE);
-            }            
-        }
-        else {
-            if(MmapCopy(fullSrcFilePath, fullDestFilePath) == -1) {
-                syslog(LOG_INFO, "MmapCopy(): Could not copy %s to %s", fullSrcFilePath, fullDestFilePath);                                 
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
-        currentSrc = currentSrc->next;                       
-    }
-
-    while(currentDest != NULL) {
-        sprintf(fullDestFilePath, "%s/%s", realpath(destPath, resolvedPath), currentDest->fileName);            
-        if(remove(fullDestFilePath) == -1) {
-            syslog(LOG_INFO, "remove(): Could not remove %s", fullDestFilePath);                 
-            exit(EXIT_FAILURE);
-        }
-
-        syslog(LOG_INFO, "%s has been removed", fullDestFilePath);    
-
-        currentDest = currentDest->next;                                     
-    }
+    CopyAllFilesFromList(srcDirFiles, srcPath, destPath);
+    RemoveAllFilesFromList(destDirFiles, destPath);
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
@@ -368,7 +406,8 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(fullSrcFilePath);
     free(fullDestFilePath);
     free(resolvedPath);
-    free(newTime);
+    free(srcDirFiles);
+    free(destDirFiles);    
 }
 
 void RecursiveDirSync(const char *srcPath, const char *destPath) {
@@ -449,7 +488,7 @@ int main(int argc, char *const argv[]) {
 
     free(srcDirInfo);
     free(destDirInfo);
-    return 0; 
+    exit(EXIT_SUCCESS); 
 }
 
 //  @TODO
