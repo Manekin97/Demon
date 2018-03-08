@@ -344,6 +344,7 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(fullSrcFilePath);
     free(fullDestFilePath);
     free(resolvedPath);
+    free(newTime);
 }
 
 void RecursiveDirSync(const char *srcPath, const char *destPath) {
@@ -354,7 +355,7 @@ void Sigusr1Handler(int signo) {
     syslog(LOG_INFO, "Daemon was awakened by signal SIGUSR1");
 }
 
-int main(int argc, char * const argv[]) {
+int main(int argc, char *const argv[]) {
     const char *srcPath = argv[1]; 
     const char *destPath = argv[2]; 
 
