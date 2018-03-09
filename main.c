@@ -26,7 +26,6 @@ int sleepInterval = 300;
 bool recursiveSearch = false; 
 
 // funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
-// czy potrzebne jest realpath? chyba nie
 
 int MmapCopy(char *srcPath, char *destPath) {
     struct stat fileInfo; 
@@ -302,10 +301,9 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
-    char *resolvedPath = malloc(PATH_MAX * sizeof(char));
 
     bool found = false;
-    Node *tmp = malloc(sizeof(struct node));
+    Node *nodePtr = malloc(sizeof(struct node));
 
     source = opendir(srcPath);
     if (!source) {
@@ -327,8 +325,8 @@ void DirSync(const char *srcPath, const char *destPath) {
     while(currentSrc != NULL) {
         while(currentDest != NULL) {
             if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) { 
-                fullSrcFilePath = AppendFileNameToPath(realpath(srcPath, resolvedPath), currentSrc->fileName);
-                fullDestFilePath = AppendFileNameToPath(realpath(destPath, resolvedPath), currentDest->fileName);
+                fullSrcFilePath = AppendFileNameToPath(srcPath, currentSrc->fileName);
+                fullDestFilePath = AppendFileNameToPath(destPath, currentDest->fileName);
                 
                 srcFileInfo = GetFileInfo(fullSrcFilePath);
                 destFileInfo = GetFileInfo(fullDestFilePath);
@@ -336,21 +334,17 @@ void DirSync(const char *srcPath, const char *destPath) {
                 if(srcFileInfo->st_mtime > destFileInfo->st_mtime) {
                     Copy(fullSrcFilePath, fullDestFilePath, srcFileInfo);
                     SyncModTime(srcFileInfo, fullDestFilePath);
-                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   
+                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   //  do debugowania, potem poprawic
                 }
-                else { // jak nie to tylko usunac z listy
-                    Remove(currentDest->fileName, destDirFiles);
-                    syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);                   
-                    currentDest = destDirFiles->head;  
+                else {
                     found = true;              
-                    break;
                 }
             }
 
             if(found) {
                 Remove(currentDest->fileName, destDirFiles);
-                syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);                   
                 currentDest = destDirFiles->head;                
+                syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);    //  do debugowania, potem wyjebac               
                 break;
             }
             else {
@@ -359,31 +353,16 @@ void DirSync(const char *srcPath, const char *destPath) {
         }
 
         if(found) {
-            tmp = currentSrc->next;
+            nodePtr = currentSrc->next;
             Remove(currentSrc->fileName, srcDirFiles);
-            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", currentSrc->fileName);                               
+            currentSrc = nodePtr;
             found = false;
-            currentSrc = tmp;
+            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", currentSrc->fileName);  //  do debugowania, potem wyjebac                               
         }
         else {
             currentSrc = currentSrc->next;
         }
     }
-
-    // currentSrc = srcDirFiles->head;
-    // currentDest = destDirFiles->head;
-
-    // syslog(LOG_INFO, "currentSrc:");
-    // while(currentSrc != NULL) {
-    //     syslog(LOG_INFO, "%s", currentSrc->fileName);
-    //     currentSrc = currentSrc->next;        
-    // }
-
-    // syslog(LOG_INFO, "currentDest:");
-    // while(currentDest != NULL) {
-    //     syslog(LOG_INFO, "%s", currentDest->fileName);
-    //     currentDest = currentDest->next;        
-    // }
 
     CopyAllFilesFromList(srcDirFiles, srcPath, destPath);
     RemoveAllFilesFromList(destDirFiles, destPath);
@@ -409,8 +388,19 @@ void RecursiveDirSync(const char *srcPath, const char *destPath) {
 
 }
 
-void Sigusr1Handler(int signo) {
+void Sigusr1Handler(int signo) {    
     syslog(LOG_INFO, "Daemon was awakened by signal SIGUSR1");
+}
+
+void SignalHandler(int signo) {
+    switch(signo) {
+        case SIGUSR1:
+            syslog(LOG_INFO, "Daemon was awakened by user");
+            break;
+        case SIGTERM:
+            syslog(LOG_INFO, "Daemon was terminated by user");
+            break;               
+    }
 }
 
 int main(int argc, char *const argv[]) {
@@ -420,8 +410,13 @@ int main(int argc, char *const argv[]) {
     struct stat *srcDirInfo = malloc(sizeof(struct stat));
     struct stat *destDirInfo = malloc(sizeof(struct stat));
 
-    if (signal(SIGUSR1, &Sigusr1Handler) == SIG_ERR) {
-        perror("singal()");
+    if (signal(SIGUSR1, &SignalHandler) == SIG_ERR) {
+        perror("signal()");
+        exit(EXIT_FAILURE); 
+    }
+
+    if (signal(SIGTERM, &SignalHandler) == SIG_ERR) {
+        perror("signal()");
         exit(EXIT_FAILURE); 
     }
 
