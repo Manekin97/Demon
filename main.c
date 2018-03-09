@@ -144,7 +144,7 @@ int Copy(char *srcPath, char *destPath, struct stat *srcFileInfo) {
     }
 }
 
-char *AppendFileNameToPath(char *path, char *filename) {
+char *AppendToPath(char *path, char *filename) {
     char *newPath = malloc(PATH_MAX * sizeof(char));
     if(sprintf(newPath, "%s/%s", path, filename) == -1) {
         syslog(LOG_INFO, "sprintf(): Error appending filename");
@@ -172,8 +172,8 @@ int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
     
     Node *current = list->head;
     while(current != NULL) { 
-        fullSrcFilePath = AppendFileNameToPath(srcDir, current->fileName);
-        fullDestFilePath = AppendFileNameToPath(destDir, current->fileName);        
+        fullSrcFilePath = AppendToPath(srcDir, current->fileName);
+        fullDestFilePath = AppendToPath(destDir, current->fileName);        
         fileInfo = GetFileInfo(fullSrcFilePath);    
         
         Copy(fullSrcFilePath, fullDestFilePath, fileInfo);
@@ -192,7 +192,7 @@ int RemoveAllFilesFromList(List *list, char *path) {
     
     Node *current = list->head;
     while(current != NULL) {
-        fullPath = AppendFileNameToPath(path, current->fileName);           
+        fullPath = AppendToPath(path, current->fileName);           
         if(remove(fullPath) == -1) {
             syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);                 
             exit(EXIT_FAILURE);
@@ -232,6 +232,64 @@ List *GetAllFileNamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
     }   
 
     return list;
+}
+
+int CompareModTime(char *srcPath, char *destPath) {
+    struct stat *srcFileInfo = NULL;
+    struct stat *destFileInfo = NULL;
+
+    srcFileInfo = GetFileInfo(srcPath);
+    destFileInfo = GetFileInfo(destPath);
+
+    if (srcFileInfo->st_mtime > destFileInfo->st_mtime) {
+        return 1;
+    }
+    else if (srcFileInfo->st_mtime == destFileInfo->st_mtime){
+        return 0;
+    }
+    else {
+        return -1;
+    }
+}
+
+bool FindAndCopy(List *list, char *srcPath, char *destPath, char *filename) {
+    char *fullSrcFilePath = NULL;
+    char *fullDestFilePath = NULL;
+
+    struct stat *srcFileInfo = NULL;
+    struct stat *destFileInfo = NULL;
+
+    bool found = false;
+
+    Node *current = list->head;
+    while(current != NULL) {
+        if(strcmp(current->fileName, filename) == 0) { 
+            fullSrcFilePath = AppendToPath(srcPath, filename);
+            fullDestFilePath = AppendToPath(destPath, filename);
+                
+            srcFileInfo = GetFileInfo(fullSrcFilePath);
+            destFileInfo = GetFileInfo(fullDestFilePath);
+
+            if(CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {
+                Copy(fullSrcFilePath, fullDestFilePath, srcFileInfo);
+                SyncModTime(srcFileInfo, fullDestFilePath);
+                syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   //  do debugowania, potem poprawic
+            }
+
+            found = true;
+        }
+
+        if(found) {
+            Remove(current->fileName, list);                
+            syslog(LOG_INFO, "%s usuniety z listy destDirFiles", current->fileName);    //  do debugowania, potem wyjebac               
+            return;
+        }
+        else {
+            current = current->next;
+        }
+    }
+
+    return found;
 }
 
 void Daemonize() {
@@ -302,7 +360,6 @@ void DirSync(const char *srcPath, const char *destPath) {
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
 
-    bool found = false;
     Node *nodePtr = malloc(sizeof(struct node));
 
     source = opendir(srcPath);
@@ -320,47 +377,16 @@ void DirSync(const char *srcPath, const char *destPath) {
     List *srcDirFiles = GetAllFileNamesFromDir(source, true);
     List *destDirFiles = GetAllFileNamesFromDir(destination, true);
 
-    Node *currentSrc = srcDirFiles->head;
-    Node *currentDest = destDirFiles->head;
-    while(currentSrc != NULL) {
-        while(currentDest != NULL) {
-            if(strcmp(currentSrc->fileName, currentDest->fileName) == 0) { 
-                fullSrcFilePath = AppendFileNameToPath(srcPath, currentSrc->fileName);
-                fullDestFilePath = AppendFileNameToPath(destPath, currentDest->fileName);
-                
-                srcFileInfo = GetFileInfo(fullSrcFilePath);
-                destFileInfo = GetFileInfo(fullDestFilePath);
-
-                if(srcFileInfo->st_mtime > destFileInfo->st_mtime) {
-                    Copy(fullSrcFilePath, fullDestFilePath, srcFileInfo);
-                    SyncModTime(srcFileInfo, fullDestFilePath);
-                    syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   //  do debugowania, potem poprawic
-                }
-                else {
-                    found = true;              
-                }
-            }
-
-            if(found) {
-                Remove(currentDest->fileName, destDirFiles);
-                currentDest = destDirFiles->head;                
-                syslog(LOG_INFO, "%s usuniety z listy destDirFiles", currentDest->fileName);    //  do debugowania, potem wyjebac               
-                break;
-            }
-            else {
-                currentDest = currentDest->next;
-            }
-        }
-
-        if(found) {
-            nodePtr = currentSrc->next;
-            Remove(currentSrc->fileName, srcDirFiles);
-            currentSrc = nodePtr;
-            found = false;
-            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", currentSrc->fileName);  //  do debugowania, potem wyjebac                               
+    Node *current = srcDirFiles->head;
+    while(current != NULL) {
+        if(FindAndCopy(destDirFiles, srcPath, destPath, current->fileName)) {
+            nodePtr = current->next;
+            Remove(current->fileName, srcDirFiles);
+            current = nodePtr;
+            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->fileName);  //  do debugowania, potem wyjebac                               
         }
         else {
-            currentSrc = currentSrc->next;
+            current = current->next;
         }
     }
 
@@ -369,10 +395,12 @@ void DirSync(const char *srcPath, const char *destPath) {
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        return -1;
     }
 
     if(closedir(destination) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", destPath);
+        return -1;
     }
 
     free(srcFileInfo);
@@ -384,8 +412,78 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(destDirFiles);    
 }
 
-void RecursiveDirSync(const char *srcPath, const char *destPath) {
+int CopyDirectory(DIR *source, char *srcPath, char *destPath) {
+    struct dirent *srcDirInfo = NULL;
 
+    if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
+        syslog(LOG_INFO, "mkdir(): \"%s\" %s", destPath, strerror(errno))
+        return -1;
+    } 
+
+    destination = opendir(destPath); 
+    if (!destination) {
+        syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+        return -1;
+    }    
+
+    while((srcDirInfo = readdir(source)) != -1) {
+        if(srcDirInfo->d_type == DT_DIR) {
+            CopyDirectory(destination, AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name));
+        }
+        else{
+            Copy(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name))            
+        }
+    }
+
+    if(closedir(destination) == -1) {
+        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        return -1;
+    }
+}
+
+void RecursiveDirSync(const char *srcPath, const char *destPath) {
+    DIR *source = NULL; 
+    DIR *destination = NULL;  
+
+    struct dirent *srcDirInfo = NULL; 
+    struct dirent *destDirInfo = NULL;
+
+    List *srcDirFiles = InitList();
+    List *destDirFiles = InitList();
+
+    source = opendir(srcPath);
+    if (!source) {
+        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
+        exit(EXIT_FAILURE); 
+    }
+
+    destination = opendir(destPath); 
+    if (!destination) {
+        if(errno == ENOENT) {   //trzeba sprawdzc, czy to nie jest destPath z parametru wywolania
+            CopyDirectory(srcPath, destPath);
+        }
+        else {
+            syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+            exit(EXIT_FAILURE); 
+        }
+    }
+
+    while ((srcDirInfo = readdir(source)) != NULL) {
+        if(srcDirInfo->d_type == DT_REG){
+            Append(srcDirInfo->d_name, srcDirFiles);
+        }
+        else {
+            RecursiveDirSync(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(srcPath, srcDirInfo->d_name));
+        }
+    }
+
+    while((destDirInfo = readdir(source)) != NULL) {
+        if(destDirInfo->d_type == DT_REG){
+            Append(destDirInfo->d_name, destDirFiles);
+        }
+    }
+
+    // skopiuj pliki z src do dest
 }
 
 void Sigusr1Handler(int signo) {    
