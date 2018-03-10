@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 typedef struct node {
-  char *fileName;
+  char *filename;
   struct node *next;
 } Node;
 
@@ -10,9 +10,9 @@ typedef struct list {
   Node *head; 
 } List;
 
-Node *CreateNode(char *fileName){
+Node *CreateNode(char *filename){
   Node *newNode = malloc(sizeof(Node));
-  newNode->fileName = fileName;
+  newNode->filename = filename;
   newNode->next = NULL;
 
   return newNode;
@@ -25,10 +25,10 @@ List *InitList(){
   return list;
 }
 
-void Append(char *fileName, List *list) {
+void Append(char *filename, List *list) {
     Node *current = NULL;
     if(list->head == NULL){
-        list->head = CreateNode(fileName);
+        list->head = CreateNode(filename);
     }
     else {
         current = list->head; 
@@ -36,15 +36,15 @@ void Append(char *fileName, List *list) {
             current = current->next;
         }
     
-        current->next = CreateNode(fileName);
+        current->next = CreateNode(filename);
     }
 }
 
-void Remove(char *fileName, List *list) {
+void Remove(char *filename, List *list) {
     Node *current = list->head;            
     Node *previous = current;           
     while(current != NULL){           
-        if(current->fileName == fileName){      
+        if(current->filename == filename){      
             previous->next = current->next;
             if(current == list->head) {
                 list->head = current->next;

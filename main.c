@@ -26,6 +26,8 @@ int sleepInterval = 300;
 bool recursiveSearch = false; 
 
 // funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
+// dodac do nich syslogi i kontrole błędów
+// dodac zwalnieanie pamieci
 
 int MmapCopy(char *srcPath, char *destPath) {
     struct stat fileInfo; 
@@ -133,22 +135,23 @@ int Copy(char *srcPath, char *destPath, struct stat *srcFileInfo) {
     if (srcFileInfo->st_size < fileSizeThreshHold) {
         if (RegularCopy(srcPath, destPath) == -1) {
             syslog(LOG_INFO, "RegularCopy(): Could not copy %s to %s", srcPath, destPath);
-            exit(EXIT_FAILURE);
+            return -1;
         }
     }
     else {
         if (MmapCopy(srcPath, destPath) == -1) {
             syslog(LOG_INFO, "MmapCopy(): Could not copy %s to %s", srcPath, destPath);
-            exit(EXIT_FAILURE);
+            return -1;
         }
     }
+
+    return 0;
 }
 
 char *AppendToPath(char *path, char *filename) {
     char *newPath = malloc(PATH_MAX * sizeof(char));
-    if(sprintf(newPath, "%s/%s", path, filename) == -1) {
-        syslog(LOG_INFO, "sprintf(): Error appending filename");
-        exit(EXIT_FAILURE);
+    if(sprintf(newPath, "%s/%s", path, filename);
+        return NULL;
     }
 
     return newPath;
@@ -159,7 +162,7 @@ struct stat *GetFileInfo(char *path) {
     
     if (stat(path, fileInfo) == -1) {
         syslog(LOG_INFO, "stat(): %s", strerror(errno));
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     return fileInfo;
@@ -172,11 +175,13 @@ int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
     
     Node *current = list->head;
     while(current != NULL) { 
-        fullSrcFilePath = AppendToPath(srcDir, current->fileName);
-        fullDestFilePath = AppendToPath(destDir, current->fileName);        
+        fullSrcFilePath = AppendToPath(srcDir, current->filename);        
         fileInfo = GetFileInfo(fullSrcFilePath);    
         
-        Copy(fullSrcFilePath, fullDestFilePath, fileInfo);
+        if(Copy(fullSrcFilePath, fullDestFilePath, fileInfo) == -1) {
+            syslog(LOG_INFO, "Copy(): Could not copy"); 
+            return -1;
+        }
 
         syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
         current = current->next;                       
@@ -185,6 +190,8 @@ int CopyAllFilesFromList(List *list, char *srcDir, char *destDir) {
     free(fullSrcFilePath);
     free(fullDestFilePath);
     free(fileInfo);    
+
+    return 0;
 }
 
 int RemoveAllFilesFromList(List *list, char *path) {
@@ -192,15 +199,17 @@ int RemoveAllFilesFromList(List *list, char *path) {
     
     Node *current = list->head;
     while(current != NULL) {
-        fullPath = AppendToPath(path, current->fileName);           
+        fullPath = AppendToPath(path, current->filename);           
         if(remove(fullPath) == -1) {
             syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);                 
-            exit(EXIT_FAILURE);
+            return -1;
         }
 
         syslog(LOG_INFO, "%s has been removed", fullPath);    
         current = current->next;                                     
     }
+
+    return 0;
 }
 
 int SyncModTime(struct stat *fileInfo, char *destPath) {
@@ -211,10 +220,13 @@ int SyncModTime(struct stat *fileInfo, char *destPath) {
     newTime->modtime = fileInfo->st_mtime;
     if (utime(destPath, newTime) == -1) {
         syslog(LOG_INFO, "utime(): %s", strerror(errno));
+        return -1;
     }
+
+    return 0;
 }
 
-List *GetAllFileNamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
+List *GetAllfilenamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
     List *list = InitList();
     struct dirent *dirInfo = NULL;
 
@@ -263,25 +275,7 @@ bool FindAndCopy(List *list, char *srcPath, char *destPath, char *filename) {
 
     Node *current = list->head;
     while(current != NULL) {
-        if(strcmp(current->fileName, filename) == 0) { 
-            fullSrcFilePath = AppendToPath(srcPath, filename);
-            fullDestFilePath = AppendToPath(destPath, filename);
-                
-            srcFileInfo = GetFileInfo(fullSrcFilePath);
-            destFileInfo = GetFileInfo(fullDestFilePath);
-
-            if(CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {
-                Copy(fullSrcFilePath, fullDestFilePath, srcFileInfo);
-                SyncModTime(srcFileInfo, fullDestFilePath);
-                syslog(LOG_INFO, "%s has been copied to %s cause of mod", fullSrcFilePath, fullDestFilePath);   //  do debugowania, potem poprawic
-            }
-
-            found = true;
-        }
-
-        if(found) {
-            Remove(current->fileName, list);                
-            syslog(LOG_INFO, "%s usuniety z listy destDirFiles", current->fileName);    //  do debugowania, potem wyjebac               
+        if(strcmp(current->filename);    //  do debugowania, potem wyjebac               
             return;
         }
         else {
@@ -290,6 +284,71 @@ bool FindAndCopy(List *list, char *srcPath, char *destPath, char *filename) {
     }
 
     return found;
+}
+
+int CopyDirectory(DIR *source, char *srcPath, char *destPath) {
+    struct dirent *srcDirInfo = NULL;
+
+    if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
+        syslog(LOG_INFO, "mkdir(): \"%s\" %s", destPath, strerror(errno))
+        return -1;
+    } 
+
+    destination = opendir(destPath); 
+    if (!destination) {
+        syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+        return -1;
+    }    
+
+    while((srcDirInfo = readdir(source)) != -1) {
+        if(srcDirInfo->d_type == DT_REG) {
+            if(Copy(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", srcDirInfo->d_name);                 
+                return -1;
+            }            
+        }
+        else {
+            if(CopyDirectory(destination, AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "CopyDirectory(): could not copy directory");                 
+                return -1;
+            }
+        }
+    }
+
+    if(closedir(destination) == -1) {
+        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        return -1;
+    }
+
+    return 0;
+}
+
+int RemoveDirectory(char *path) {
+    DIR *directory = NULL;
+    struct dirent *fileInfo = NULL;
+
+    directory = opendir(path); 
+    if (!directory) {
+        syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", path); 
+        return -1;
+    }  
+
+    while((fileInfo = readdir(directory)) != -1) {
+        if(fileInfo->d_type == DT_REG) {
+            if(remove(AppendToPath(path, fileInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fullPath);                 
+                return -1;
+            }
+        }
+        else {
+            if(RemoveDirectory(AppendToPath(path, fileInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fullPath);                 
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 void Daemonize() {
@@ -357,9 +416,6 @@ void DirSync(const char *srcPath, const char *destPath) {
     struct stat *srcFileInfo = NULL;
     struct stat *destFileInfo = NULL;
 
-    char *fullSrcFilePath = NULL;
-    char *fullDestFilePath = NULL;
-
     Node *nodePtr = malloc(sizeof(struct node));
 
     source = opendir(srcPath);
@@ -374,16 +430,103 @@ void DirSync(const char *srcPath, const char *destPath) {
         exit(EXIT_FAILURE); 
     }
 
-    List *srcDirFiles = GetAllFileNamesFromDir(source, true);
-    List *destDirFiles = GetAllFileNamesFromDir(destination, true);
+    List *srcDirFiles = GetAllfilenamesFromDir(source, true);
+    List *destDirFiles = GetAllfilenamesFromDir(destination, true);
 
     Node *current = srcDirFiles->head;
     while(current != NULL) {
-        if(FindAndCopy(destDirFiles, srcPath, destPath, current->fileName)) {
+        if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename)) {
             nodePtr = current->next;
-            Remove(current->fileName, srcDirFiles);
+            Remove(current->filename, srcDirFiles);
             current = nodePtr;
-            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->fileName);  //  do debugowania, potem wyjebac                               
+            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->filename);  //  do debugowania, potem wyjebac                               
+        }
+        else {
+            current = current->next;
+        }
+    }
+
+    if(CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
+        syslog(LOG_INFO, "CopyAllFilesFromList()");                                      
+        return -1;
+    }
+
+    if(RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
+        syslog(LOG_INFO, "CopyAllFilesFromList()");        
+        return -1;
+    }
+
+    if(closedir(source) == -1) {
+        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        return -1;
+    }
+
+    if(closedir(destination) == -1) {
+        syslog(LOG_INFO, "Could not close \"%s\"", destPath);
+        return -1;
+    }
+
+    free(srcFileInfo);
+    free(destFileInfo);
+    free(srcDirFiles);
+    free(destDirFiles);    
+    free(nodePtr);
+}
+
+int RecursiveDirSync(const char *srcPath, const char *destPath) {
+    DIR *source = NULL; 
+    DIR *destination = NULL;  
+
+    struct dirent *srcFileInfo = NULL; 
+    struct dirent *destFileInfo = NULL;
+
+    List *srcDirFiles = InitList();
+    List *destDirFiles = InitList();
+
+    Node *nodePtr = malloc(sizeof(struct node));    
+
+    source = opendir(srcPath);
+    if (!source) {
+        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
+        return -1; 
+    }
+
+    destination = opendir(destPath); 
+    if (!destination) {
+        if(errno == ENOENT) {
+            CopyDirectory(srcPath, destPath);
+        }
+        else {
+            syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+            return -1;             
+        }
+    }
+
+    while ((srcFileInfo = readdir(source)) != NULL) {
+        if(srcFileInfo->d_type == DT_REG){
+            Append(srcFileInfo->d_name, srcDirFiles);
+        }
+        else {
+            if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(srcPath, srcFileInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "RecursiveDirSync():");                 
+                return -1;                 
+            }
+        }
+    }
+
+    while((destFileInfo = readdir(source)) != NULL) {
+        if(destFileInfo->d_type == DT_REG){
+            Append(destFileInfo->d_name, destDirFiles);
+        }
+    }
+
+    Node *current = srcDirFiles->head;
+    while(current != NULL) {
+        if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename) == -1) {
+            nodePtr = current->next;
+            Remove(current->filename, srcDirFiles);
+            current = nodePtr;
+            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->filename);  //  do debugowania, potem wyjebac 
         }
         else {
             current = current->next;
@@ -407,87 +550,9 @@ void DirSync(const char *srcPath, const char *destPath) {
     free(destFileInfo);
     free(fullSrcFilePath);
     free(fullDestFilePath);
-    free(resolvedPath);
     free(srcDirFiles);
-    free(destDirFiles);    
-}
-
-int CopyDirectory(DIR *source, char *srcPath, char *destPath) {
-    struct dirent *srcDirInfo = NULL;
-
-    if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
-        syslog(LOG_INFO, "mkdir(): \"%s\" %s", destPath, strerror(errno))
-        return -1;
-    } 
-
-    destination = opendir(destPath); 
-    if (!destination) {
-        syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
-        return -1;
-    }    
-
-    while((srcDirInfo = readdir(source)) != -1) {
-        if(srcDirInfo->d_type == DT_DIR) {
-            CopyDirectory(destination, AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name));
-        }
-        else{
-            Copy(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name))            
-        }
-    }
-
-    if(closedir(destination) == -1) {
-        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
-        return -1;
-    }
-}
-
-void RecursiveDirSync(const char *srcPath, const char *destPath) {
-    DIR *source = NULL; 
-    DIR *destination = NULL;  
-
-    struct dirent *srcDirInfo = NULL; 
-    struct dirent *destDirInfo = NULL;
-
-    List *srcDirFiles = InitList();
-    List *destDirFiles = InitList();
-
-    source = opendir(srcPath);
-    if (!source) {
-        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
-        exit(EXIT_FAILURE); 
-    }
-
-    destination = opendir(destPath); 
-    if (!destination) {
-        if(errno == ENOENT) {   //trzeba sprawdzc, czy to nie jest destPath z parametru wywolania
-            CopyDirectory(srcPath, destPath);
-        }
-        else {
-            syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
-            exit(EXIT_FAILURE); 
-        }
-    }
-
-    while ((srcDirInfo = readdir(source)) != NULL) {
-        if(srcDirInfo->d_type == DT_REG){
-            Append(srcDirInfo->d_name, srcDirFiles);
-        }
-        else {
-            RecursiveDirSync(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(srcPath, srcDirInfo->d_name));
-        }
-    }
-
-    while((destDirInfo = readdir(source)) != NULL) {
-        if(destDirInfo->d_type == DT_REG){
-            Append(destDirInfo->d_name, destDirFiles);
-        }
-    }
-
-    // skopiuj pliki z src do dest
-}
-
-void Sigusr1Handler(int signo) {    
-    syslog(LOG_INFO, "Daemon was awakened by signal SIGUSR1");
+    free(destDirFiles); 
+    return 0;
 }
 
 void SignalHandler(int signo) {
@@ -567,7 +632,10 @@ int main(int argc, char *const argv[]) {
             DirSync(srcPath, destPath);
         }
         else {
-            RecursiveDirSync(srcPath, destPath);
+            if(RecursiveDirSync(srcPath, destPath) == -1) {
+                syslog(LOG_INFO, "Daemon sie zesral");
+                exit(EXIT_FAILURE);                 
+            }
         }
 
         syslog(LOG_INFO, "Daemon went to sleep for %d s", sleepInterval);
