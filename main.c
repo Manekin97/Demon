@@ -506,7 +506,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
 
     source = opendir(srcPath);
     if (!source) {
-        //syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
+        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
         return -1; 
     }
 
@@ -516,7 +516,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
             CopyDirectory(source, srcPath, destPath);
         }
         else {
-            //syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+            syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
             return -1;             
         }
     }
@@ -530,15 +530,15 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
             Append(srcFileInfo->d_name, srcDirFiles);
         }
         else if(srcFileInfo->d_type == DT_DIR) {
-            syslog(LOG_INFO, "RecursiveDirSync(): src = %s, dest = %s", srcPath, destPath);
+            // syslog(LOG_INFO, "RecursiveDirSync(): src = %s, dest = %s", srcPath, destPath);
             if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                //syslog(LOG_INFO, "RecursiveDirSync():");                 
+                syslog(LOG_INFO, "RecursiveDirSync():");                 
                 return -1;                 
             }
         }
     }
 
-    while((destFileInfo = readdir(source)) != NULL) {
+    while((destFileInfo = readdir(destination)) != NULL) {
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
@@ -560,12 +560,12 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
     RemoveAllFilesFromList(destDirFiles, destPath);
 
     if(closedir(source) == -1) {
-        //syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
         return -1;
     }
 
     if(closedir(destination) == -1) {
-        //syslog(LOG_INFO, "Could not close \"%s\"", destPath);
+        syslog(LOG_INFO, "Could not close \"%s\"", destPath);
         return -1;
     }
 
