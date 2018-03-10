@@ -229,7 +229,7 @@ int SyncModTime(struct stat *fileInfo, const char *destPath) {
     return 0;
 }
 
-List *GetAllfilenamesFromDir(DIR *dir, bool ignoreNonRegFiles) {
+List *GetAllfilenamesFromDir(DIR *dir, bool ignoreNonRegFiles) {    //  to potem zmienic, a najlepiej wypierdolić, bo ne potrzebne
     List *list = InitList();
     struct dirent *dirInfo = NULL;
 
@@ -255,9 +255,6 @@ int CompareModTime(const char *srcPath, const char *destPath) {
 
     srcFileInfo = GetFileInfo(srcPath);
     destFileInfo = GetFileInfo(destPath);
-
-    // syslog(LOG_INFO, "src = \"%s\", dest = \"%s\"", srcPath, destPath);
-    // syslog(LOG_INFO, "srcFileInfo->st_mtime = \"%ld\", destFileInfo->st_mtime = \"%ld\"", srcFileInfo->st_mtime, destFileInfo->st_mtime);
 
     if (srcFileInfo->st_mtime > destFileInfo->st_mtime) {
         return 1;
@@ -302,7 +299,7 @@ bool FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fi
 }
 
 int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
-    struct dirent *srcDirInfo = NULL;
+    struct dirent *srcFileInfo = NULL;
 
     if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
         syslog(LOG_INFO, "mkdir(): \"%s\" %s", destPath, strerror(errno));
@@ -315,15 +312,19 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
         return -1;
     }    
 
-    while((srcDirInfo = readdir(source)) != NULL) {
-        if(srcDirInfo->d_type == DT_REG) {
-            if(Copy(AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", srcDirInfo->d_name);                 
+    while((srcFileInfo = readdir(source)) != NULL) {
+        if(strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {
+            continue;
+        }
+
+        if(srcFileInfo->d_type == DT_REG) {
+            if(Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", srcFileInfo->d_name);                 
                 return -1;
             }            
         }
-        else {
-            if(CopyDirectory(source, AppendToPath(srcPath, srcDirInfo->d_name), AppendToPath(destPath, srcDirInfo->d_name)) == -1) {
+        else if(srcFileInfo->d_type == DT_DIR) {
+            if(CopyDirectory(source, AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "CopyDirectory(): could not copy directory");                 
                 return -1;
             }
@@ -349,13 +350,17 @@ int RemoveDirectory(const char *path) {
     }  
 
     while((fileInfo = readdir(directory)) != NULL) {
+        if(strcmp(fileInfo->d_name, ".") == 0 || strcmp(fileInfo->d_name, "..") == 0) {
+            continue;
+        }
+        
         if(fileInfo->d_type == DT_REG) {
             if(remove(AppendToPath(path, fileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name);                 
                 return -1;
             }
         }
-        else {
+        else if(fileInfo->d_type == DT_DIR){
             if(RemoveDirectory(AppendToPath(path, fileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name);                 
                 return -1;
@@ -453,8 +458,7 @@ int DirSync(const char *srcPath, const char *destPath) {
         if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename)) {
             nodePtr = current->next;
             Remove(current->filename, srcDirFiles);
-            current = nodePtr;
-            //syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->filename);  //  do debugowania, potem wyjebac                               
+            current = nodePtr;                            
         }
         else {
             current = current->next;
@@ -502,7 +506,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
 
     source = opendir(srcPath);
     if (!source) {
-        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
+        //syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
         return -1; 
     }
 
@@ -512,18 +516,23 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
             CopyDirectory(source, srcPath, destPath);
         }
         else {
-            syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+            //syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
             return -1;             
         }
     }
 
     while ((srcFileInfo = readdir(source)) != NULL) {
+        if(strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {
+            continue;
+        }
+
         if(srcFileInfo->d_type == DT_REG){
             Append(srcFileInfo->d_name, srcDirFiles);
         }
-        else {
-            if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(srcPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "RecursiveDirSync():");                 
+        else if(srcFileInfo->d_type == DT_DIR) {
+            syslog(LOG_INFO, "RecursiveDirSync(): src = %s, dest = %s", srcPath, destPath);
+            if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
+                //syslog(LOG_INFO, "RecursiveDirSync():");                 
                 return -1;                 
             }
         }
@@ -541,7 +550,6 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
             nodePtr = current->next;
             Remove(current->filename, srcDirFiles);
             current = nodePtr;
-            syslog(LOG_INFO, "%s usuniety z listy srcDirFiles", current->filename);  //  do debugowania, potem wyjebac 
         }
         else {
             current = current->next;
@@ -552,12 +560,12 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
     RemoveAllFilesFromList(destDirFiles, destPath);
 
     if(closedir(source) == -1) {
-        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        //syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
         return -1;
     }
 
     if(closedir(destination) == -1) {
-        syslog(LOG_INFO, "Could not close \"%s\"", destPath);
+        //syslog(LOG_INFO, "Could not close \"%s\"", destPath);
         return -1;
     }
 
