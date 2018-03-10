@@ -25,9 +25,12 @@ int fileSizeThreshHold = 4096;
 int sleepInterval = 300; 
 bool recursiveSearch = false; 
 
-// funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
-// dodac do nich syslogi i kontrole błędów
-// dodac zwalnieanie pamieci
+//  @TODO
+//  Poprawić syslogi
+//  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
+//  funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
+//  dodac do nich syslogi i kontrole błędów
+//  dodac zwalnieanie pamieci
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -229,26 +232,6 @@ int SyncModTime(struct stat *fileInfo, const char *destPath) {
     return 0;
 }
 
-List *GetAllfilenamesFromDir(DIR *dir, bool ignoreNonRegFiles) {    //  to potem zmienic, a najlepiej wypierdolić, bo ne potrzebne
-    List *list = InitList();
-    struct dirent *dirInfo = NULL;
-
-    if(ignoreNonRegFiles) {
-        while ((dirInfo = readdir(dir)) != NULL) {
-            if(dirInfo->d_type == DT_REG){
-                Append(dirInfo->d_name, list);
-            }
-        }
-    }
-    else {
-        while ((dirInfo = readdir(dir)) != NULL) {
-            Append(dirInfo->d_name, list);
-        }
-    }   
-
-    return list;
-}
-
 int CompareModTime(const char *srcPath, const char *destPath) {
     struct stat *srcFileInfo = NULL;
     struct stat *destFileInfo = NULL;
@@ -426,72 +409,6 @@ void Daemonize() {
     }
 }
 
-int DirSync(const char *srcPath, const char *destPath) {
-    DIR *source = NULL; 
-    DIR *destination = NULL;  
-
-    struct dirent *srcDirInfo = NULL; 
-    struct dirent *destDirInfo = NULL;
-
-    struct stat *srcFileInfo = NULL;
-    struct stat *destFileInfo = NULL;
-
-    Node *nodePtr = malloc(sizeof(struct node));
-
-    source = opendir(srcPath);
-    if (!source) {
-        syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
-        return -1; 
-    }
- 
-    destination = opendir(destPath); 
-    if (!destination) {
-        syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
-        return -1;         
-    }
-
-    List *srcDirFiles = GetAllfilenamesFromDir(source, true);
-    List *destDirFiles = GetAllfilenamesFromDir(destination, true);
-
-    Node *current = srcDirFiles->head;
-    while(current != NULL) {
-        if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename)) {
-            nodePtr = current->next;
-            Remove(current->filename, srcDirFiles);
-            current = nodePtr;                            
-        }
-        else {
-            current = current->next;
-        }
-    }
-
-    if(CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
-        syslog(LOG_INFO, "CopyAllFilesFromList()");                                      
-        return -1;
-    }
-
-    if(RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
-        syslog(LOG_INFO, "CopyAllFilesFromList()");        
-        return -1;
-    }
-
-    if(closedir(source) == -1) {
-        syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
-        return -1;
-    }
-
-    if(closedir(destination) == -1) {
-        syslog(LOG_INFO, "Could not close \"%s\"", destPath);
-        return -1;
-    }
-
-    free(srcFileInfo);
-    free(destFileInfo);
-    free(srcDirFiles);
-    free(destDirFiles);    
-    free(nodePtr);
-}
-
 int RecursiveDirSync(const char *srcPath, const char *destPath) {
     DIR *source = NULL; 
     DIR *destination = NULL;  
@@ -512,7 +429,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
 
     destination = opendir(destPath); 
     if (!destination) {
-        if(errno == ENOENT) {
+        if(errno == ENOENT && recursiveSearch) {
             CopyDirectory(source, srcPath, destPath);
         }
         else {
@@ -529,7 +446,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
         if(srcFileInfo->d_type == DT_REG){
             Append(srcFileInfo->d_name, srcDirFiles);
         }
-        else if(srcFileInfo->d_type == DT_DIR) {
+        else if(srcFileInfo->d_type == DT_DIR && recursiveSearch) {
             // syslog(LOG_INFO, "RecursiveDirSync(): src = %s, dest = %s", srcPath, destPath);
             if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "RecursiveDirSync():");                 
@@ -647,19 +564,14 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    //Daemonize(); 
+    Daemonize(); 
  
     while (1) { 
-        if(!recursiveSearch) {
-            DirSync(srcPath, destPath);
+        if(RecursiveDirSync(srcPath, destPath) == -1) {
+            syslog(LOG_INFO, "Daemon sie zesral");
+            exit(EXIT_FAILURE);                 
         }
-        else {
-            if(RecursiveDirSync(srcPath, destPath) == -1) {
-                syslog(LOG_INFO, "Daemon sie zesral");
-                exit(EXIT_FAILURE);                 
-            }
-        }
-
+        
         syslog(LOG_INFO, "Daemon went to sleep for %d s", sleepInterval);
         sleep(sleepInterval); 
     }
@@ -668,9 +580,3 @@ int main(int argc, char *const argv[]) {
     free(destDirInfo);
     exit(EXIT_SUCCESS); 
 }
-
-//  @TODO
-//  Poprawić syslogi
-//  Dodac rekurencyjne przeszukiwanie katalogów
-// dm w src < dm w dest
-//  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
