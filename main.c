@@ -286,7 +286,8 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
             if(CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {
                 if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
                     syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
-                    Remove(current->filename, list);                    
+                    Remove(current->filename, list);   
+                    //RemoveAt(current, list);                 
 
                     free(fullSrcFilePath);
                     free(fullDestFilePath);
@@ -298,6 +299,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
             }             
 
             Remove(current->filename, list);
+            //RemoveAt(current, list); 
             free(fullSrcFilePath);
             free(fullDestFilePath);
             free(srcFileInfo);
@@ -547,6 +549,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         if(result == 0) {
             nodePtr = current->next;
             Remove(current->filename, srcDirFiles);
+            //RemoveAt(current, srcDirFiles); 
             current = nodePtr;
         }
         else if (result == 1) {
