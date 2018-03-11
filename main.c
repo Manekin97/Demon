@@ -484,6 +484,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
     List *srcDirFiles = InitList();
     List *destDirFiles = InitList();
+    List *srcDirectories = InitList();
 
     Node *nodePtr = malloc(sizeof(struct node));    
 
@@ -533,6 +534,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
             Append(srcFileInfo->d_name, srcDirFiles);
         }
         else if(srcFileInfo->d_type == DT_DIR && recursiveSearch) {
+            Append(srcFileInfo->d_name, srcDirectories);
+
             if(SynchronizeDirectories(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\"", AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)); 
 
@@ -545,13 +548,19 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
             }
         }
     }
-
-    //syslog(LOG_INFO, "destFileInfo->d_name =  %s", destFileInfo->d_name);     
-    while((destFileInfo = readdir(destination)) != NULL) {
-        //syslog(LOG_INFO, "destFileInfo->d_name =  %s", destFileInfo->d_name);     
+     
+    while((destFileInfo = readdir(destination)) != NULL) {   
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
+        // else if(destFileInfo->d_type == DT_DIR) {
+        //     if(Contains(srcDirectories, destFileInfo->d_name) == -1) {
+        //         if(RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {
+        //             syslog(LOG_INFO, "RemoveDirectory(): Could not remove directory");                         
+        //             return -1;
+        //         }
+        //     }
+        // }
     }
 
     Node *current = srcDirFiles->head;

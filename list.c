@@ -71,3 +71,16 @@ void RemoveAt(Node *node, List *list) { // nie testowane
     free(current);
     return;
 }
+
+int Contains(List *list, char *name) {
+    Node *current = list->head;
+    while(current != NULL){           
+        if(strcmp(current->filename, name) == 0){
+            return 1;
+        }
+
+        current = current->next;        
+    }        
+
+    return -1;         
+}
