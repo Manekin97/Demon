@@ -28,6 +28,8 @@ bool recursiveSearch = false;
 //  @TODO
 //  Poprawić syslogi
 //  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
+//  nie dziala usuwanie folderow, ktroe sa w dest a nie ma w src
+//  sprawdzic, czy dziala mmapcopy
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -328,11 +330,17 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
         return -1;
     } 
 
-    source = opendir(destPath); 
+    // source = opendir(destPath); 
+    // if (!source) {
+    //     syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
+    //     return -1;
+    // }    
+
+    source = opendir(srcPath); 
     if (!source) {
-        syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
+        syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno)); 
         return -1;
-    }    
+    }  
 
     while((srcFileInfo = readdir(source)) != NULL) {
         if(strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {
@@ -342,7 +350,7 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
         if(srcFileInfo->d_type == DT_REG) {
             if(Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));  
-                free(srcFileInfo);
+                //free(srcFileInfo);
                                
                 return -1;
             }            
@@ -350,7 +358,7 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
         else if(srcFileInfo->d_type == DT_DIR) {
             if(CopyDirectory(source, AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);                 
-                free(srcFileInfo);
+                //free(srcFileInfo);
                                
                 return -1;
             }
@@ -360,11 +368,11 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
 
-        free(srcFileInfo);
+        //free(srcFileInfo);
         return -1;
     }
 
-    free(srcFileInfo);
+    //free(srcFileInfo);                     
     return 0;
 }
 
@@ -402,7 +410,7 @@ int RemoveDirectory(const char *path) {
     }
 
     if(closedir(directory) == -1) {
-        syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
+        syslog(LOG_INFO, "closedir(): \"%s\" (%s)", path, strerror(errno));
 
         free(fileInfo);
         return -1;
@@ -489,7 +497,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
         return -1; 
     }
-
+ 
     destination = opendir(destPath); 
     if (!destination) {
         if(errno == ENOENT && recursiveSearch) {
@@ -502,6 +510,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
                 return -1;
             }
+
+            return 0;
         }
         else {
             syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
@@ -536,7 +546,9 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         }
     }
 
+    //syslog(LOG_INFO, "destFileInfo->d_name =  %s", destFileInfo->d_name);     
     while((destFileInfo = readdir(destination)) != NULL) {
+        //syslog(LOG_INFO, "destFileInfo->d_name =  %s", destFileInfo->d_name);     
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
@@ -545,7 +557,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     Node *current = srcDirFiles->head;
     int result;
     while(current != NULL) {
-        result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename)
+        result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
         if(result == 0) {
             nodePtr = current->next;
             Remove(current->filename, srcDirFiles);
@@ -555,8 +567,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         else if (result == 1) {
             syslog(LOG_INFO, "FindAndCopy(): Could not copy files");     
 
-            free(srcFileInfo);
-            free(destFileInfo);
+            //free(srcFileInfo);
+            //free(destFileInfo);
             free(srcDirFiles);
             free(destDirFiles); 
             free(nodePtr);
@@ -571,8 +583,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
         syslog(LOG_INFO, "CopyAllFilesFromList(): Could not copy files.");
 
-        free(srcFileInfo);
-        free(destFileInfo);
+        //free(srcFileInfo);
+        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -583,8 +595,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
         syslog(LOG_INFO, "RemoveAllFilesFromList(): Could not remove files");
 
-        free(srcFileInfo);
-        free(destFileInfo);
+        //free(srcFileInfo);
+        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -595,8 +607,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "\"%s\" (%s)", srcPath, strerror(errno));
 
-        free(srcFileInfo);
-        free(destFileInfo);
+        //free(srcFileInfo);
+        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -607,8 +619,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(closedir(destination) == -1) {
         syslog(LOG_INFO, "\"%s\" (%s)", destPath, strerror(errno));        
 
-        free(srcFileInfo);
-        free(destFileInfo);
+        //free(srcFileInfo);
+        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -616,8 +628,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         return -1;
     }
 
-    free(srcFileInfo);
-    free(destFileInfo);
+    //free(srcFileInfo);
+    //free(destFileInfo);
     free(srcDirFiles);
     free(destDirFiles); 
     free(nodePtr); 
@@ -696,7 +708,7 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    Daemonize(); 
+    // Daemonize(); 
  
     while (1) { 
         if(SynchronizeDirectories(srcPath, destPath) == -1) {
