@@ -28,9 +28,6 @@ bool recursiveSearch = false;
 //  @TODO
 //  Poprawić syslogi
 //  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
-//  funckje nie powinny miec exita, tylko zwracać ujemna liczbe, potem trzeba to poprawić
-//  dodac do nich syslogi i kontrole błędów
-//  dodac zwalnieanie pamieci
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -161,6 +158,7 @@ int Copy(const char *srcPath, const char *destPath) {
         }
     }
 
+    free(srcFileInfo);
     return 0;
 }
 
@@ -186,6 +184,11 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
         
         if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
             syslog(LOG_INFO, "Copy(): Could not copy"); 
+
+            free(fullSrcFilePath);
+            free(fullDestFilePath);
+            free(fileInfo); 
+
             return -1;
         }
 
@@ -207,7 +210,9 @@ int RemoveAllFilesFromList(List *list, const char *path) {
     while(current != NULL) {
         fullPath = AppendToPath(path, current->filename);           
         if(remove(fullPath) == -1) {
-            syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);                 
+            syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);   
+            free(fullPath);            
+
             return -1;
         }
 
@@ -215,20 +220,26 @@ int RemoveAllFilesFromList(List *list, const char *path) {
         current = current->next;                                     
     }
 
+    free(fullPath);
     return 0;
 }
 
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
     struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
-    time_t *t = malloc(sizeof(time_t));
+    time_t *t = malloc(sizeof(time_t)); // to chyba nie potrzebne, bo mozena wywołać time(NULL)
     
     newTime->actime = time(t);
     newTime->modtime = fileInfo->st_mtime;
     if (utime(destPath, newTime) == -1) {
         syslog(LOG_INFO, "utime(): %s", strerror(errno));
+        free(newTime);
+        free(t); 
+
         return -1;
     }
 
+    free(newTime);
+    free(t);    
     return 0;
 }
 
@@ -240,17 +251,26 @@ int CompareModTime(const char *srcPath, const char *destPath) {
     destFileInfo = GetFileInfo(destPath);
 
     if (srcFileInfo->st_mtime > destFileInfo->st_mtime) {
+        free(srcFileInfo);
+        free(destFileInfo);
+
         return 1;
     }
     else if (srcFileInfo->st_mtime == destFileInfo->st_mtime){
+        free(srcFileInfo);
+        free(destFileInfo);
+
         return 0;
     }
     else {
+        free(srcFileInfo);
+        free(destFileInfo);
+
         return -1;
     }
 }
 
-bool FindAndCopy(List *list, const char *srcPath, const char *destPath, char *filename) {
+int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *filename) {
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
 
@@ -264,21 +284,38 @@ bool FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fi
             fullDestFilePath = AppendToPath(destPath, filename);
             
             if(CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {
-                if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {// pomyslec nad tym
+                if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
                     syslog(LOG_INFO, "Copy()");
-                    //return false;
+                    Remove(current->filename, list);                    
+
+                    free(fullSrcFilePath);
+                    free(fullDestFilePath);
+                    free(srcFileInfo);
+                    free(destFileInfo);
+
+                    return 1;
                 }
             }             
 
             Remove(current->filename, list);
-            return true;
+            free(fullSrcFilePath);
+            free(fullDestFilePath);
+            free(srcFileInfo);
+            free(destFileInfo);
+
+            return 0;
         }
         else {
             current = current->next;
         }
     }
 
-    return false;
+    free(fullSrcFilePath);
+    free(fullDestFilePath);
+    free(srcFileInfo);
+    free(destFileInfo);
+    
+    return -1;
 }
 
 int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
@@ -302,13 +339,17 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
 
         if(srcFileInfo->d_type == DT_REG) {
             if(Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", srcFileInfo->d_name);                 
+                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", srcFileInfo->d_name);  
+                free(srcFileInfo);
+                               
                 return -1;
             }            
         }
         else if(srcFileInfo->d_type == DT_DIR) {
             if(CopyDirectory(source, AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "CopyDirectory(): could not copy directory");                 
+                syslog(LOG_INFO, "CopyDirectory(): could not copy directory");  
+                free(srcFileInfo);
+                               
                 return -1;
             }
         }
@@ -316,9 +357,12 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+        free(srcFileInfo);
+        
         return -1;
     }
 
+    free(srcFileInfo);
     return 0;
 }
 
@@ -339,18 +383,23 @@ int RemoveDirectory(const char *path) {
         
         if(fileInfo->d_type == DT_REG) {
             if(remove(AppendToPath(path, fileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name);                 
+                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name);  
+                free(fileInfo);
+                               
                 return -1;
             }
         }
         else if(fileInfo->d_type == DT_DIR){
             if(RemoveDirectory(AppendToPath(path, fileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name);                 
+                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", fileInfo->d_name); 
+                free(fileInfo);
+                                
                 return -1;
             }
         }
     }
 
+    free(fileInfo);
     return 0;
 }
 
@@ -409,7 +458,7 @@ void Daemonize() {
     }
 }
 
-int RecursiveDirSync(const char *srcPath, const char *destPath) {
+int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     DIR *source = NULL; 
     DIR *destination = NULL;  
 
@@ -424,6 +473,11 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
     source = opendir(srcPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" %s", srcPath, strerror(errno));
+
+        free(srcDirFiles);
+        free(destDirFiles); 
+        free(nodePtr);
+
         return -1; 
     }
 
@@ -434,6 +488,11 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
         }
         else {
             syslog(LOG_INFO, "opendir(): \"%s\" could not be opened properly", destPath); 
+
+            free(srcDirFiles);
+            free(destDirFiles); 
+            free(nodePtr);
+
             return -1;             
         }
     }
@@ -447,9 +506,14 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
             Append(srcFileInfo->d_name, srcDirFiles);
         }
         else if(srcFileInfo->d_type == DT_DIR && recursiveSearch) {
-            // syslog(LOG_INFO, "RecursiveDirSync(): src = %s, dest = %s", srcPath, destPath);
-            if(RecursiveDirSync(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "RecursiveDirSync():");                 
+            if(SynchronizeDirectories(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
+                syslog(LOG_INFO, "SynchronizeDirectories():"); 
+
+                free(srcFileInfo);
+                free(srcDirFiles);
+                free(destDirFiles); 
+                free(nodePtr);       
+
                 return -1;                 
             }
         }
@@ -463,7 +527,7 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
 
     Node *current = srcDirFiles->head;
     while(current != NULL) {
-        if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename) == -1) {
+        if(FindAndCopy(destDirFiles, srcPath, destPath, current->filename) > -1) {
             nodePtr = current->next;
             Remove(current->filename, srcDirFiles);
             current = nodePtr;
@@ -473,16 +537,51 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
         }
     }
 
-    CopyAllFilesFromList(srcDirFiles, srcPath, destPath);
-    RemoveAllFilesFromList(destDirFiles, destPath);
+    if(CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
+        syslog(LOG_INFO, "CopyAllFilesFromList()");
+
+        free(srcFileInfo);
+        free(destFileInfo);
+        free(srcDirFiles);
+        free(destDirFiles); 
+        free(nodePtr);
+
+        return -1;
+    }
+
+    if(RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
+        syslog(LOG_INFO, "RemoveAllFilesFromList()");
+
+        free(srcFileInfo);
+        free(destFileInfo);
+        free(srcDirFiles);
+        free(destDirFiles); 
+        free(nodePtr);
+
+        return -1;
+    }
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", srcPath);
+
+        free(srcFileInfo);
+        free(destFileInfo);
+        free(srcDirFiles);
+        free(destDirFiles); 
+        free(nodePtr);
+
         return -1;
     }
 
     if(closedir(destination) == -1) {
         syslog(LOG_INFO, "Could not close \"%s\"", destPath);
+
+        free(srcFileInfo);
+        free(destFileInfo);
+        free(srcDirFiles);
+        free(destDirFiles); 
+        free(nodePtr);
+
         return -1;
     }
 
@@ -490,7 +589,8 @@ int RecursiveDirSync(const char *srcPath, const char *destPath) {
     free(destFileInfo);
     free(srcDirFiles);
     free(destDirFiles); 
-
+    free(nodePtr); 
+    
     return 0;
 }
 
@@ -512,6 +612,8 @@ int main(int argc, char *const argv[]) {
     struct stat *srcDirInfo = malloc(sizeof(struct stat));
     struct stat *destDirInfo = malloc(sizeof(struct stat));
 
+    int argument;     
+
     if (signal(SIGUSR1, &SignalHandler) == SIG_ERR) {
         perror("signal()");
         exit(EXIT_FAILURE); 
@@ -522,7 +624,6 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE); 
     }
 
-    int argument; 
     while ((argument = getopt(argc, argv, "Rt:i:")) != -1) {
         switch (argument) {
             case 't':
@@ -540,7 +641,7 @@ int main(int argc, char *const argv[]) {
                 break; 
             case '?':
                 printf("Wrong Arguments\n"); 
-                return -1; 
+                exit(EXIT_FAILURE);                 
         }
     }
 
@@ -567,7 +668,7 @@ int main(int argc, char *const argv[]) {
     Daemonize(); 
  
     while (1) { 
-        if(RecursiveDirSync(srcPath, destPath) == -1) {
+        if(SynchronizeDirectories(srcPath, destPath) == -1) {
             syslog(LOG_INFO, "Daemon sie zesral");
             exit(EXIT_FAILURE);                 
         }

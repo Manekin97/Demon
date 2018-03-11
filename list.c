@@ -58,3 +58,16 @@ void Remove(char *filename, List *list) {
         current = current->next;        
     }                                 
 }
+
+void RemoveAt(Node *node, List *list) { // nie testowane
+    Node *current = node;            
+    Node *previous = current;
+
+    previous->next = current->next;
+    if(current == list->head) {
+        list->head = current->next;
+    }
+
+    free(current);
+    return;
+}
