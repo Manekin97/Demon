@@ -27,9 +27,7 @@ bool recursiveSearch = false;
 
 //  @TODO
 //  Poprawić syslogi
-//  usuwanie pliku z listy potem można przyspieszyć, bo teraz to szuka od początku w liście, a mogę po prostu podać np. currentSrc
 //  nie dziala usuwanie folderow, ktroe sa w dest a nie ma w src
-//  sprawdzic, czy dziala mmapcopy
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -287,9 +285,8 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
             
             if(CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {
                 if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
-                    syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
-                    Remove(current->filename, list);   
-                    //RemoveAt(current, list);                 
+                    syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath); 
+                    RemoveAt(current, list);                 
 
                     free(fullSrcFilePath);
                     free(fullDestFilePath);
@@ -300,8 +297,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
                 }
             }             
 
-            Remove(current->filename, list);
-            //RemoveAt(current, list); 
+            RemoveAt(current, list); 
             free(fullSrcFilePath);
             free(fullDestFilePath);
             free(srcFileInfo);
@@ -553,7 +549,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
-        // else if(destFileInfo->d_type == DT_DIR) {
+        // else if(destFileInfo->d_type == DT_DIR) { // to nie dziala
         //     if(Contains(srcDirectories, destFileInfo->d_name) == -1) {
         //         if(RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {
         //             syslog(LOG_INFO, "RemoveDirectory(): Could not remove directory");                         
@@ -569,8 +565,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
         if(result == 0) {
             nodePtr = current->next;
-            Remove(current->filename, srcDirFiles);
-            //RemoveAt(current, srcDirFiles); 
+            RemoveAt(current, srcDirFiles); 
             current = nodePtr;
         }
         else if (result == 1) {
