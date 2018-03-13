@@ -27,7 +27,6 @@ bool recursiveSearch = false;
 
 //  @TODO
 //  Poprawić syslogi
-//  nie dziala usuwanie folderow, ktroe sa w dest a nie ma w src
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -394,6 +393,11 @@ int RemoveDirectory(const char *path) {
         }
     }
 
+    if(remove(path) == -1) {
+        syslog(LOG_INFO, "remove(): \"%s\" (%s)", path, strerror(errno));
+        return -1;
+    }
+
     if(closedir(directory) == -1) {
         syslog(LOG_INFO, "closedir(): \"%s\" (%s)", path, strerror(errno));
         return -1;
@@ -534,14 +538,20 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
-        // else if(destFileInfo->d_type == DT_DIR) { // to nie dziala
-        //     if(Contains(srcDirectories, destFileInfo->d_name) == -1) {
-        //         if(RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {
-        //             syslog(LOG_INFO, "RemoveDirectory(): Could not remove directory");                         
-        //             return -1;
-        //         }
-        //     }
-        // }
+        else if(destFileInfo->d_type == DT_DIR) { // to nie dziala
+            if(strcmp(destFileInfo->d_name, ".") == 0 || strcmp(destFileInfo->d_name, "..") == 0) {
+                continue;
+            }
+            
+            //syslog(LOG_INFO, "znaleziono katalog \"%s\"", destFileInfo->d_name);
+
+            if(Contains(srcDirectories, destFileInfo->d_name) == -1) {
+                if(RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {
+                    syslog(LOG_INFO, "RemoveDirectory(): Could not remove directory");                         
+                    return -1;
+                }
+            }
+        }
     }
 
     Node *current = srcDirFiles->head;
