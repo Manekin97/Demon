@@ -27,6 +27,7 @@ bool recursiveSearch = false;
 
 //  @TODO
 //  Poprawić syslogi
+//  Dodałem optymalizacje pamięci, sprawdzić, czy działa
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -96,7 +97,8 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 }
 
 int RegularCopy(const char *srcPath, const char *destPath) {
-    char *buffer = malloc(sizeof(char) * BUFFER_SIZE); 
+    // char *buffer = malloc(sizeof(char) * BUFFER_SIZE); 
+    char buffer[BUFFER_SIZE];
 
     int source = open(srcPath, O_RDONLY); 
     if (source == -1) {
@@ -110,7 +112,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 
     ssize_t bytesRead; 
     ssize_t bytesWritten; 
-    while ((bytesRead = read(source, buffer, BUFFER_SIZE)) != 0) {
+    while ((bytesRead = read(source, &buffer, BUFFER_SIZE)) != 0) {
         if (bytesRead == -1) {
             if (errno == EINTR) {
                 continue; 
@@ -119,7 +121,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
             return -1; 
         }
 
-        bytesWritten = write(destination, buffer, bytesRead); 
+        bytesWritten = write(destination, &buffer, bytesRead); 
         if (bytesWritten == -1) {
             return -1; 
         }
@@ -137,7 +139,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
         return -1; 
     }
 
-    free(buffer); 
+    //free(buffer); 
     return 0; 
 }
 
@@ -162,7 +164,8 @@ int Copy(const char *srcPath, const char *destPath) {
 }
 
 char *AppendToPath(const char *path, char *filename) {
-    char *newPath = malloc(PATH_MAX * sizeof(char));
+    //char *newPath = malloc(PATH_MAX * sizeof(char));
+    char *newPath = malloc(sizeof(path) + sizeof(filename) + 1);    //  nie wiem, czy tu nie trzeba +2 bo jeszcze \0
     if(sprintf(newPath, "%s/%s", path, filename) < 0) {
         return NULL;
     }
@@ -224,21 +227,23 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 }
 
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
-    struct utimbuf *newTime = malloc(sizeof(struct utimbuf));
-    time_t *t = malloc(sizeof(time_t)); // to chyba nie potrzebne, bo mozena wywołać time(NULL)
+    struct utimbuf newTime;
+    //struct utimbuf *newTime = malloc(sizeof(struct utimbuf)); // to lepiej statycznie zadeklarować
+    //time_t *t = malloc(sizeof(time_t)); // to chyba nie potrzebne, bo mozena wywołać time(NULL)
     
-    newTime->actime = time(t);
+    //newTime->actime = time(t);
+    newTime->actime = time(NULL);
     newTime->modtime = fileInfo->st_mtime;
-    if (utime(destPath, newTime) == -1) {
+    if (utime(destPath, &newTime) == -1) {
         syslog(LOG_INFO, "utime(): %s", strerror(errno));
-        free(newTime);
-        free(t); 
+        //free(newTime);
+        //free(t); 
 
         return -1;
     }
 
-    free(newTime);
-    free(t);    
+    //free(newTime);
+    //free(t);    
     return 0;
 }
 
