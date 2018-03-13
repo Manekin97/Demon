@@ -326,11 +326,11 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
         return -1;
     } 
 
-    // source = opendir(destPath); 
-    // if (!source) {
-    //     syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
-    //     return -1;
-    // }    
+    source = opendir(destPath); // to było zakomoentowane
+    if (!source) {
+        syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
+        return -1;
+    }    
 
     source = opendir(srcPath); 
     if (!source) {
@@ -345,17 +345,13 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
 
         if(srcFileInfo->d_type == DT_REG) {
             if(Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));  
-                //free(srcFileInfo);
-                               
+                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));                                 
                 return -1;
             }            
         }
         else if(srcFileInfo->d_type == DT_DIR) {
             if(CopyDirectory(source, AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);                 
-                //free(srcFileInfo);
-                               
+                syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);                   
                 return -1;
             }
         }
@@ -363,12 +359,9 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
-
-        //free(srcFileInfo);
         return -1;
     }
-
-    //free(srcFileInfo);                     
+                     
     return 0;
 }
 
@@ -389,17 +382,13 @@ int RemoveDirectory(const char *path) {
         
         if(fileInfo->d_type == DT_REG) {
             if(remove(AppendToPath(path, fileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "remove(): \"%s\" (%s)", AppendToPath(path, fileInfo->d_name), strerror(errno));  
-                free(fileInfo);
-                               
+                syslog(LOG_INFO, "remove(): \"%s\" (%s)", AppendToPath(path, fileInfo->d_name), strerror(errno));                             
                 return -1;
             }
         }
         else if(fileInfo->d_type == DT_DIR){
             if(RemoveDirectory(AppendToPath(path, fileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", AppendToPath(path, fileInfo->d_name)); 
-                free(fileInfo);
-                                
+                syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", AppendToPath(path, fileInfo->d_name));    
                 return -1;
             }
         }
@@ -407,12 +396,9 @@ int RemoveDirectory(const char *path) {
 
     if(closedir(directory) == -1) {
         syslog(LOG_INFO, "closedir(): \"%s\" (%s)", path, strerror(errno));
-
-        free(fileInfo);
         return -1;
     }
 
-    free(fileInfo);
     return 0;
 }
 
@@ -535,7 +521,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
             if(SynchronizeDirectories(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\"", AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)); 
 
-                free(srcFileInfo);
                 free(srcDirFiles);
                 free(destDirFiles); 
                 free(nodePtr);       
@@ -571,8 +556,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         else if (result == 1) {
             syslog(LOG_INFO, "FindAndCopy(): Could not copy files");     
 
-            //free(srcFileInfo);
-            //free(destFileInfo);
             free(srcDirFiles);
             free(destDirFiles); 
             free(nodePtr);
@@ -587,8 +570,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
         syslog(LOG_INFO, "CopyAllFilesFromList(): Could not copy files.");
 
-        //free(srcFileInfo);
-        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -599,8 +580,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
         syslog(LOG_INFO, "RemoveAllFilesFromList(): Could not remove files");
 
-        //free(srcFileInfo);
-        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -611,8 +590,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "\"%s\" (%s)", srcPath, strerror(errno));
 
-        //free(srcFileInfo);
-        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -623,8 +600,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     if(closedir(destination) == -1) {
         syslog(LOG_INFO, "\"%s\" (%s)", destPath, strerror(errno));        
 
-        //free(srcFileInfo);
-        //free(destFileInfo);
         free(srcDirFiles);
         free(destDirFiles); 
         free(nodePtr);
@@ -632,8 +607,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         return -1;
     }
 
-    //free(srcFileInfo);
-    //free(destFileInfo);
     free(srcDirFiles);
     free(destDirFiles); 
     free(nodePtr); 
