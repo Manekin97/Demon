@@ -411,21 +411,21 @@ int RemoveDirectory(const char *path) {
     return 0;
 }
 
-void Daemonize() {
+void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
     pid_t pid; 
 
     pid = fork(); 
     if (pid == -1) {
         perror("fork");
-        exit(EXIT_FAILURE); 
+        exit(EXIT_FAILURE);
     }
     else if (pid > 0) {
-        exit(EXIT_SUCCESS); 
+        exit(EXIT_SUCCESS);
     }
 
     if (setsid() == -1) {
         perror("setsid");
-        exit(EXIT_FAILURE); 
+        exit(EXIT_FAILURE);
     }
 
     signal(SIGHUP, SIG_IGN);
@@ -433,7 +433,7 @@ void Daemonize() {
 
     if (pid == -1) {
         perror("fork");
-        exit(EXIT_FAILURE); 
+        exit(EXIT_FAILURE);
     }
     else if (pid > 0) {
         exit(EXIT_SUCCESS); 
@@ -447,10 +447,14 @@ void Daemonize() {
     umask(0);
 
     for (int i = 0; i < sysconf(_SC_OPEN_MAX); i++) {
-        close(i); 
+        if(close(i) == -1) {
+            syslog(LOG_INFO, "%s", strerror(errno));   
+            exit(EXIT_FAILURE);        
+        }
     }
 
-    openlog(NULL, LOG_USER, LOG_USER);  
+    openlog(NULL, LOG_USER, LOG_USER);
+    syslog(LOG_INFO, "App started");
 
     if (open("/dev/null", O_RDONLY) == -1) {
         syslog(LOG_INFO, "STDIN could not be opened properly");
@@ -644,10 +648,10 @@ int main(int argc, char *const argv[]) {
     const char *srcPath = argv[1]; 
     const char *destPath = argv[2]; 
 
-    struct stat *srcDirInfo = malloc(sizeof(struct stat));
-    struct stat *destDirInfo = malloc(sizeof(struct stat));
-
-    int argument;     
+    // struct stat *srcDirInfo = malloc(sizeof(struct stat));
+    // struct stat *destDirInfo = malloc(sizeof(struct stat));
+    struct stat srcDirInfo;
+    struct stat destDirInfo;  
 
     if (signal(SIGUSR1, &SignalHandler) == SIG_ERR) {
         perror("signal()");
@@ -659,6 +663,7 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE); 
     }
 
+    unsigned int argument;
     while ((argument = getopt(argc, argv, "Rt:i:")) != -1) {
         switch (argument) {
             case 't':
@@ -680,12 +685,12 @@ int main(int argc, char *const argv[]) {
         }
     }
 
-    if(stat(srcPath, srcDirInfo) == -1) {
+    if(stat(srcPath, &srcDirInfo) == -1) {
         perror("stat");
         exit(EXIT_FAILURE);
     }
     
-    if(stat(destPath, destDirInfo) == -1) {
+    if(stat(destPath, &destDirInfo) == -1) {
         perror("stat");
         exit(EXIT_FAILURE);
     }
@@ -700,7 +705,7 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Daemonize(); 
+    Daemonize();       
  
     while (1) { 
         if(SynchronizeDirectories(srcPath, destPath) == -1) {
@@ -712,7 +717,7 @@ int main(int argc, char *const argv[]) {
         sleep(sleepInterval); 
     }
 
-    free(srcDirInfo);
-    free(destDirInfo);
+    // free(srcDirInfo);
+    // free(destDirInfo);
     exit(EXIT_SUCCESS); 
 }
