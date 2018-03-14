@@ -27,8 +27,8 @@ bool recursiveSearch = false;
 
 //  @TODO
 //  Poprawić syslogi
-//  Dodałem optymalizacje pamięci, sprawdzić, czy działa
-// nie działa zmiana czsu modyfikacji
+//  Zostało jeszcze parę wycieków pamieci (Przy AppendToPath i listy(8B chuj wie czemu))
+//  nie działa zmiana czsu modyfikacji
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -304,14 +304,18 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
     struct dirent *srcFileInfo = NULL;
     DIR *source = NULL;
 
-    if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
+    struct stat *fileInfo = GetFileInfo(srcPath);
+
+    if(mkdir(destPath, fileInfo->st_mode) == -1) {
         syslog(LOG_INFO, "mkdir(): \"%s\" (%s)", destPath, strerror(errno));
+        free(fileInfo);
         return -1;
     } 
 
     source = opendir(srcPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno)); 
+        free(fileInfo);
         return -1;
     }  
 
@@ -322,13 +326,15 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
         if(srcFileInfo->d_type == DT_REG) {
             if(Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));                                 
+                syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));      
+                free(fileInfo);                           
                 return -1;
             }            
         }
         else if(srcFileInfo->d_type == DT_DIR) {
             if(CopyDirectory(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
-                syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);                   
+                syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);              
+                free(fileInfo);     
                 return -1;
             }
         }
@@ -336,9 +342,11 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
     if(closedir(source) == -1) {
         syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
+        free(fileInfo);
         return -1;
     }
-                     
+
+    free(fileInfo);  
     return 0;
 }
 
@@ -480,16 +488,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
                 return -1;
             }
-
-            // if(CopyDirectory(source, srcPath, destPath) == -1) {
-            //     syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);   
-
-            //     free(srcDirFiles);
-            //     free(destDirFiles); 
-            //     free(srcDirectories);
-
-            //     return -1;
-            // }
 
             return 0;
         }

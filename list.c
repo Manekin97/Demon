@@ -86,12 +86,10 @@ int Contains(List *list, char *name) {
 }
 
 void DestroyList(List *list) {
-    Node *current = list->head;
-    Node *tmp;
-    while(current != NULL) {
-        tmp = current->next;
-        // RemoveAt(current, list);
-        Remove(current->filename, list);
-        current = tmp;
-    }    
+    Node *current;
+    
+    while ((current = list->head) != NULL) {
+        list->head = list->head->next;
+        free (current);
+    }
 }
