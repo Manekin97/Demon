@@ -28,6 +28,7 @@ bool recursiveSearch = false;
 //  @TODO
 //  Poprawić syslogi
 //  Dodałem optymalizacje pamięci, sprawdzić, czy działa
+// nie działa zmiana czsu modyfikacji
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -96,8 +97,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
     return 0; 
 }
 
-int RegularCopy(const char *srcPath, const char *destPath) {
-    // char *buffer = malloc(sizeof(char) * BUFFER_SIZE); 
+int RegularCopy(const char *srcPath, const char *destPath) { 
     char buffer[BUFFER_SIZE];
 
     int source = open(srcPath, O_RDONLY); 
@@ -139,7 +139,6 @@ int RegularCopy(const char *srcPath, const char *destPath) {
         return -1; 
     }
 
-    //free(buffer); 
     return 0; 
 }
 
@@ -164,8 +163,7 @@ int Copy(const char *srcPath, const char *destPath) {
 }
 
 char *AppendToPath(const char *path, char *filename) {
-    //char *newPath = malloc(PATH_MAX * sizeof(char));
-    char *newPath = malloc(sizeof(path) + sizeof(filename) + 1);    //  nie wiem, czy tu nie trzeba +2 bo jeszcze \0
+    char *newPath = malloc(PATH_MAX * sizeof(char));
     if(sprintf(newPath, "%s/%s", path, filename) < 0) {
         return NULL;
     }
@@ -176,31 +174,27 @@ char *AppendToPath(const char *path, char *filename) {
 int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
-    struct stat *fileInfo = NULL;    
     
     Node *current = list->head;
     while(current != NULL) { 
         fullSrcFilePath = AppendToPath(srcDir, current->filename); 
-        fullDestFilePath = AppendToPath(destDir, current->filename);       
-        fileInfo = GetFileInfo(fullSrcFilePath);    
+        fullDestFilePath = AppendToPath(destDir, current->filename);          
         
         if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
             syslog(LOG_INFO, "Copy(): Could not copy"); 
 
             free(fullSrcFilePath);
             free(fullDestFilePath);
-            free(fileInfo); 
 
             return -1;
         }
 
         syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
+
+        free(fullSrcFilePath);
+        free(fullDestFilePath);
         current = current->next;                       
     }
-
-    free(fullSrcFilePath);
-    free(fullDestFilePath);
-    free(fileInfo);    
 
     return 0;
 }
@@ -227,23 +221,15 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 }
 
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
-    struct utimbuf newTime;
-    //struct utimbuf *newTime = malloc(sizeof(struct utimbuf)); // to lepiej statycznie zadeklarować
-    //time_t *t = malloc(sizeof(time_t)); // to chyba nie potrzebne, bo mozena wywołać time(NULL)
+    struct utimbuf *newTime;
     
-    //newTime->actime = time(t);
     newTime->actime = time(NULL);
     newTime->modtime = fileInfo->st_mtime;
-    if (utime(destPath, &newTime) == -1) {
+    if (utime(destPath, newTime) == -1) {
         syslog(LOG_INFO, "utime(): %s", strerror(errno));
-        //free(newTime);
-        //free(t); 
-
         return -1;
     }
-
-    //free(newTime);
-    //free(t);    
+ 
     return 0;
 }
 
@@ -278,9 +264,6 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
 
-    struct stat *srcFileInfo = NULL;
-    struct stat *destFileInfo = NULL;
-
     Node *current = list->head;
     while(current != NULL) {
         if(strcmp(current->filename, filename) == 0) { 
@@ -294,18 +277,15 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 
                     free(fullSrcFilePath);
                     free(fullDestFilePath);
-                    free(srcFileInfo);
-                    free(destFileInfo);
 
                     return 1;
                 }
             }             
 
             RemoveAt(current, list); 
+
             free(fullSrcFilePath);
             free(fullDestFilePath);
-            free(srcFileInfo);
-            free(destFileInfo);
 
             return 0;
         }
@@ -316,27 +296,20 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 
     free(fullSrcFilePath);
     free(fullDestFilePath);
-    free(srcFileInfo);
-    free(destFileInfo);
     
     return -1;
 }
 
-int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
+int CopyDirectory(const char *srcPath, const char *destPath) {
     struct dirent *srcFileInfo = NULL;
+    DIR *source = NULL;
 
     if(mkdir(destPath, 0777) == -1) { // narazie nie wiem jaki dostep, wiec zostaje 0777
         syslog(LOG_INFO, "mkdir(): \"%s\" (%s)", destPath, strerror(errno));
         return -1;
     } 
 
-    source = opendir(destPath); // to było zakomoentowane
-    if (!source) {
-        syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno)); 
-        return -1;
-    }    
-
-    source = opendir(srcPath); 
+    source = opendir(srcPath);
     if (!source) {
         syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno)); 
         return -1;
@@ -354,7 +327,7 @@ int CopyDirectory(DIR *source, const char *srcPath, const char *destPath) {
             }            
         }
         else if(srcFileInfo->d_type == DT_DIR) {
-            if(CopyDirectory(source, AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
+            if(CopyDirectory(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {
                 syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);                   
                 return -1;
             }
@@ -447,10 +420,11 @@ void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
     umask(0);
 
     for (int i = 0; i < sysconf(_SC_OPEN_MAX); i++) {
-        if(close(i) == -1) {
-            syslog(LOG_INFO, "%s", strerror(errno));   
-            exit(EXIT_FAILURE);        
-        }
+        close(i);
+        // if(close(i) == -1) {
+        //     syslog(LOG_INFO, "%s", strerror(errno));   
+        //     exit(EXIT_FAILURE);        
+        // }
     }
 
     openlog(NULL, LOG_USER, LOG_USER);
@@ -480,8 +454,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     List *srcDirFiles = InitList();
     List *destDirFiles = InitList();
     List *srcDirectories = InitList();
-
-    Node *nodePtr = malloc(sizeof(struct node));    
+   
+    Node *nodePtr;
 
     source = opendir(srcPath);
     if (!source) {
@@ -489,7 +463,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
         free(srcDirFiles);
         free(destDirFiles); 
-        free(nodePtr);
+        free(srcDirectories);
 
         return -1; 
     }
@@ -497,15 +471,25 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     destination = opendir(destPath); 
     if (!destination) {
         if(errno == ENOENT && recursiveSearch) {
-            if(CopyDirectory(source, srcPath, destPath) == -1) {
+            if(CopyDirectory(srcPath, destPath) == -1) {
                 syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);   
 
                 free(srcDirFiles);
                 free(destDirFiles); 
-                free(nodePtr);
+                free(srcDirectories);
 
                 return -1;
             }
+
+            // if(CopyDirectory(source, srcPath, destPath) == -1) {
+            //     syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);   
+
+            //     free(srcDirFiles);
+            //     free(destDirFiles); 
+            //     free(srcDirectories);
+
+            //     return -1;
+            // }
 
             return 0;
         }
@@ -514,7 +498,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
             free(srcDirFiles);
             free(destDirFiles); 
-            free(nodePtr);
+            free(srcDirectories);
 
             return -1;             
         }
@@ -536,7 +520,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
                 free(srcDirFiles);
                 free(destDirFiles); 
-                free(nodePtr);       
+                free(srcDirectories);       
 
                 return -1;                 
             }
@@ -547,12 +531,10 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         if(destFileInfo->d_type == DT_REG){
             Append(destFileInfo->d_name, destDirFiles);
         }
-        else if(destFileInfo->d_type == DT_DIR) { // to nie dziala
+        else if(destFileInfo->d_type == DT_DIR) {
             if(strcmp(destFileInfo->d_name, ".") == 0 || strcmp(destFileInfo->d_name, "..") == 0) {
                 continue;
             }
-            
-            //syslog(LOG_INFO, "znaleziono katalog \"%s\"", destFileInfo->d_name);
 
             if(Contains(srcDirectories, destFileInfo->d_name) == -1) {
                 if(RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {
@@ -577,7 +559,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
             free(srcDirFiles);
             free(destDirFiles); 
-            free(nodePtr);
+            free(srcDirectories);
 
             return -1;
         }
@@ -591,7 +573,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
         free(srcDirFiles);
         free(destDirFiles); 
-        free(nodePtr);
+        free(srcDirectories);
 
         return -1;
     }
@@ -601,7 +583,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
         free(srcDirFiles);
         free(destDirFiles); 
-        free(nodePtr);
+        free(srcDirectories);
 
         return -1;
     }
@@ -610,8 +592,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         syslog(LOG_INFO, "\"%s\" (%s)", srcPath, strerror(errno));
 
         free(srcDirFiles);
-        free(destDirFiles); 
-        free(nodePtr);
+        free(destDirFiles);
+        free(srcDirectories); 
 
         return -1;
     }
@@ -620,16 +602,20 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
         syslog(LOG_INFO, "\"%s\" (%s)", destPath, strerror(errno));        
 
         free(srcDirFiles);
-        free(destDirFiles); 
-        free(nodePtr);
+        free(destDirFiles);
+        free(srcDirectories);
 
         return -1;
     }
 
+    DestroyList(srcDirFiles);
+    DestroyList(destDirFiles);
+    DestroyList(srcDirectories);
+    
     free(srcDirFiles);
     free(destDirFiles); 
-    free(nodePtr); 
-    
+    free(srcDirectories);
+      
     return 0;
 }
 
@@ -648,8 +634,6 @@ int main(int argc, char *const argv[]) {
     const char *srcPath = argv[1]; 
     const char *destPath = argv[2]; 
 
-    // struct stat *srcDirInfo = malloc(sizeof(struct stat));
-    // struct stat *destDirInfo = malloc(sizeof(struct stat));
     struct stat srcDirInfo;
     struct stat destDirInfo;  
 
@@ -695,17 +679,17 @@ int main(int argc, char *const argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    if(!S_ISDIR(srcDirInfo->st_mode)) {
+    if(!S_ISDIR(srcDirInfo.st_mode)) {
         printf("\"%s\" is not a directory", srcPath);
         exit(EXIT_FAILURE);
     }
 
-    if(!S_ISDIR(destDirInfo->st_mode)) {
+    if(!S_ISDIR(destDirInfo.st_mode)) {
         printf("\"%s\" is not a directory", destPath);
         exit(EXIT_FAILURE);
     }
 
-    Daemonize();       
+    // Daemonize();       
  
     while (1) { 
         if(SynchronizeDirectories(srcPath, destPath) == -1) {
@@ -717,7 +701,5 @@ int main(int argc, char *const argv[]) {
         sleep(sleepInterval); 
     }
 
-    // free(srcDirInfo);
-    // free(destDirInfo);
     exit(EXIT_SUCCESS); 
 }

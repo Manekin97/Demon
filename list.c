@@ -59,7 +59,7 @@ void Remove(char *filename, List *list) {
     }                                 
 }
 
-void RemoveAt(Node *node, List *list) { // nie testowane
+void RemoveAt(Node *node, List *list) {
     Node *current = node;            
     Node *previous = current;
 
@@ -83,4 +83,15 @@ int Contains(List *list, char *name) {
     }        
 
     return -1;         
+}
+
+void DestroyList(List *list) {
+    Node *current = list->head;
+    Node *tmp;
+    while(current != NULL) {
+        tmp = current->next;
+        // RemoveAt(current, list);
+        Remove(current->filename, list);
+        current = tmp;
+    }    
 }
