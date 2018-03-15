@@ -49,17 +49,17 @@ int MmapCopy(const char *srcPath, const char *destPath) {
         return -1; 
     }
 
-    int destination = open(destPath, O_RDWR | O_CREAT, 00777); //  Nie wiem narazie co zrobić z dostepem, wiec zostawie 00777
-    if (destination == -1) {
-        return -1; 
-    }
-
-    int fileSize; 
+    off_t fileSize; 
     if (fstat(source, &fileInfo) == -1) {
         return -1; 
     }
     else {
         fileSize = fileInfo.st_size; 
+    }
+
+    int destination = open(destPath, O_RDWR | O_CREAT, fileInfo.st_mode);
+    if (destination == -1) {
+        return -1; 
     }
 
     int *srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0); 
@@ -76,7 +76,9 @@ int MmapCopy(const char *srcPath, const char *destPath) {
         return -1; 
     }
 
-    memcpy(destAddress, srcAddress, fileSize);
+    if(memcpy(destAddress, srcAddress, fileSize) == NULL) {
+        return -1;
+    }
     
     if (munmap(srcAddress, fileSize) == -1) {
         return -1; 
@@ -99,13 +101,18 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 
 int RegularCopy(const char *srcPath, const char *destPath) { 
     char buffer[BUFFER_SIZE];
+    struct stat fileInfo; 
 
     int source = open(srcPath, O_RDONLY); 
     if (source == -1) {
         return -1; 
     }
 
-    int destination = open(destPath, O_WRONLY | O_CREAT | O_TRUNC, 00777); //  Nie wiem narazie co zrobić z dostepem, wiec zostawie 00777
+    if (fstat(source, &fileInfo) == -1) {
+        return -1; 
+    }
+
+    int destination = open(destPath, O_WRONLY | O_CREAT | O_TRUNC, fileInfo.st_mode);
     if (destination == -1) {
         return -1; 
     }
@@ -392,12 +399,12 @@ int RemoveDirectory(const char *path) {
     return 0;
 }
 
-void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
+void Daemonize() {
     pid_t pid; 
 
     pid = fork(); 
     if (pid == -1) {
-        perror("fork");
+        syslog(LOG_INFO, "fork(): %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
     else if (pid > 0) {
@@ -405,7 +412,7 @@ void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
     }
 
     if (setsid() == -1) {
-        perror("setsid");
+        syslog(LOG_INFO, "setsid(): %s", strerror(errno));        
         exit(EXIT_FAILURE);
     }
 
@@ -413,7 +420,7 @@ void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
     pid = fork();
 
     if (pid == -1) {
-        perror("fork");
+        syslog(LOG_INFO, "fork(): %s", strerror(errno));        
         exit(EXIT_FAILURE);
     }
     else if (pid > 0) {
@@ -421,7 +428,7 @@ void Daemonize() { // tu raczej nie powinno być perrorów, tylko syslogi
     }
 
     if (chdir("/") == -1) {
-        perror("chdir");
+        syslog(LOG_INFO, "chdir(): %s", strerror(errno));        
         exit(EXIT_FAILURE); 
     }
 
