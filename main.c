@@ -28,7 +28,6 @@ bool recursiveSearch = false;
 //  @TODO
 //  Poprawić syslogi
 //  Zostało jeszcze parę wycieków pamieci (Przy AppendToPath i listy(8B chuj wie czemu))
-//  nie działa zmiana czsu modyfikacji // XD kurwa, bo jej nie wywołałem, sprawdzić czy teraz działa
 
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
@@ -236,17 +235,6 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 }
 
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
-    // struct utimbuf *newTime;
-    
-    // newTime->actime = time(NULL);
-    // newTime->modtime = fileInfo->st_mtime;
-    // if (utime(destPath, newTime) == -1) {
-    //     syslog(LOG_INFO, "utime(): %s", strerror(errno));
-    //     return -1;
-    // }
- 
-    // return 0;
-
     struct utimbuf newTime;
     
     newTime.actime = time(NULL);
