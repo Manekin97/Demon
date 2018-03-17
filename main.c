@@ -40,6 +40,19 @@ struct stat *GetFileInfo(const char *path) {
     return fileInfo;
 }
 
+int SyncModTime(struct stat *fileInfo, const char *destPath) {
+    struct utimbuf newTime;
+    
+    newTime.actime = time(NULL);
+    newTime.modtime = fileInfo->st_mtime;
+    if (utime(destPath, &newTime) == -1) {
+        syslog(LOG_INFO, "utime(): %s", strerror(errno));
+        return -1;
+    }
+ 
+    return 0;
+}
+
 int MmapCopy(const char *srcPath, const char *destPath) {
     struct stat fileInfo; 
 
@@ -87,7 +100,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
         return -1; 
     }
 
-    if(SyncModTime(srcPath, destPath) == -1) {
+    if(SyncModTime(&fileInfo, destPath) == -1) {
         return -1;
     }
 
@@ -141,7 +154,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
         }
     }
 
-    if(SyncModTime(srcPath, destPath) == -1) {
+    if(SyncModTime(&fileInfo, destPath) == -1) {
         return -1;
     }
 
@@ -231,19 +244,6 @@ int RemoveAllFilesFromList(List *list, const char *path) {
     }
 
     free(fullPath);
-    return 0;
-}
-
-int SyncModTime(struct stat *fileInfo, const char *destPath) {
-    struct utimbuf newTime;
-    
-    newTime.actime = time(NULL);
-    newTime.modtime = fileInfo->st_mtime;
-    if (utime(destPath, &newTime) == -1) {
-        syslog(LOG_INFO, "utime(): %s", strerror(errno));
-        return -1;
-    }
- 
     return 0;
 }
 
@@ -660,9 +660,9 @@ int main(int argc, char *const argv[]) {
     }
 
     unsigned int argument;
-    while ((argument = getopt(argc, argv, "Rt:i:")) != -1) {
+    while ((argument = getopt(argc, argv, "Rs:i:")) != -1) {
         switch (argument) {
-            case 't':
+            case 's':
                 fileSizeThreshold = atoi(optarg); 
                 break; 
             case 'i':
@@ -702,7 +702,11 @@ int main(int argc, char *const argv[]) {
     }
 
     // Daemonize();       
- 
+    syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%d", 
+        recursiveSearch ? "true" : false, 
+        sleepInterval, 
+        fileSizeThreshold);
+
     while (1) { 
         if(SynchronizeDirectories(srcPath, destPath) == -1) {
             syslog(LOG_INFO, "SynchronizeDirectories(): An error has occured. Process has been terminated.");
