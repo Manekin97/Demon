@@ -21,7 +21,7 @@
 #define BUFFER_SIZE 131072
 #define MAX_SLEEP_TIME 86400
 
-int fileSizeThreshHold = 4096; 
+int fileSizeThreshold = 4096; 
 int sleepInterval = 300; 
 bool recursiveSearch = false; 
 
@@ -159,7 +159,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 int Copy(const char *srcPath, const char *destPath) {
     struct stat *srcFileInfo = GetFileInfo(srcPath);
 
-    if (srcFileInfo->st_size < fileSizeThreshHold) {
+    if (srcFileInfo->st_size < fileSizeThreshold) {
         if (RegularCopy(srcPath, destPath) == -1) {
             syslog(LOG_INFO, "RegularCopy(): Could not copy %s to %s", srcPath, destPath);
             return -1;
@@ -663,7 +663,7 @@ int main(int argc, char *const argv[]) {
     while ((argument = getopt(argc, argv, "Rt:i:")) != -1) {
         switch (argument) {
             case 't':
-                fileSizeThreshHold = atoi(optarg); 
+                fileSizeThreshold = atoi(optarg); 
                 break; 
             case 'i':
                 sleepInterval = atoi(optarg);
