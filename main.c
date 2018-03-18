@@ -29,6 +29,7 @@ bool recursiveSearch = false;
 //  Poprawić syslogi
 //  Zostało jeszcze parę wycieków pamieci (Przy AppendToPath i listy(8B chuj wie czemu))
 
+/*Funkcja, która pobiera informacje o pliku *path i zwraca wskaźnik na struct stat*/
 struct stat *GetFileInfo(const char *path) {
     struct stat *fileInfo = malloc(sizeof(struct stat));
     
@@ -40,6 +41,7 @@ struct stat *GetFileInfo(const char *path) {
     return fileInfo;
 }
 
+/*Funkcja, która ustawia czas modyfikacji do pliku *destPath zgodnie z *fileInfo i czas dostępu na aktualny czas*/
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
     struct utimbuf newTime;
     
@@ -53,6 +55,7 @@ int SyncModTime(struct stat *fileInfo, const char *destPath) {
     return 0;
 }
 
+/*Funkcja kopiująca plik *srcPath do *destPath, używając odwzorowania w pamięci*/
 int MmapCopy(const char *srcPath, const char *destPath) {
     struct stat fileInfo; 
 
@@ -115,6 +118,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
     return 0; 
 }
 
+/*Funkcja kopiująca plik *srcPath do *destPath, używając API Linuxa*/
 int RegularCopy(const char *srcPath, const char *destPath) { 
     char buffer[BUFFER_SIZE];
     struct stat fileInfo; 
@@ -169,6 +173,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
     return 0; 
 }
 
+/*Funkcja kopiująca plik *srcPath do *destPath, na podstawie rozmiaru pliku decyduje w jaki sposób plik zostanie skopiowany*/
 int Copy(const char *srcPath, const char *destPath) {
     struct stat *srcFileInfo = GetFileInfo(srcPath);
 
@@ -189,6 +194,7 @@ int Copy(const char *srcPath, const char *destPath) {
     return 0;
 }
 
+/*Funkcja dołącza nazwę pliku *filename do ściezki *path*/
 char *AppendToPath(const char *path, char *filename) {
     char *newPath = malloc(PATH_MAX * sizeof(char));
     if(sprintf(newPath, "%s/%s", path, filename) < 0) {
@@ -198,6 +204,7 @@ char *AppendToPath(const char *path, char *filename) {
     return newPath;
 }
 
+/*Funkcja kopiuje wszystkie pliki znajdujące się na liście *list do katalogu *destDir*/
 int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
@@ -226,6 +233,7 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
     return 0;
 }
 
+/*Funkcja usuwa wszystkie pliki znajdujące się na liście *list z katalogu *path*/
 int RemoveAllFilesFromList(List *list, const char *path) {
     char *fullPath = NULL;
     
@@ -247,6 +255,7 @@ int RemoveAllFilesFromList(List *list, const char *path) {
     return 0;
 }
 
+/*Funkcja porównuje czas modyfikacji pliku *srcPath oraz *destPath*/
 int CompareModTime(const char *srcPath, const char *destPath) {
     struct stat *srcFileInfo = NULL;
     struct stat *destFileInfo = NULL;
@@ -274,6 +283,7 @@ int CompareModTime(const char *srcPath, const char *destPath) {
     }
 }
 
+/*Funkcja znajduje plik w liście *list o nazwie *filename i kopiuje go do *destPath jeżeli jego czas modyfikacji różni się od czasu modyfikacji pliku *srcPath*/
 int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *filename) {
     char *fullSrcFilePath = NULL;
     char *fullDestFilePath = NULL;
@@ -314,6 +324,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
     return -1;
 }
 
+/*Funkcja rekurencyjnie kopiuje katalog *path wraz z jego plikami oraz podkatalogami*/
 int CopyDirectory(const char *srcPath, const char *destPath) {
     struct dirent *srcFileInfo = NULL;
     DIR *source = NULL;
@@ -364,6 +375,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
     return 0;
 }
 
+/*Funkcja rekurencyjnie usuwa katalog *path wraz z jego plikami oraz podkatalogami*/
 int RemoveDirectory(const char *path) {
     DIR *directory = NULL;
     struct dirent *fileInfo = NULL;
@@ -406,6 +418,7 @@ int RemoveDirectory(const char *path) {
     return 0;
 }
 
+/*Funkcja demonizuje program*/
 void Daemonize() {
     pid_t pid; 
 
@@ -466,6 +479,7 @@ void Daemonize() {
     }
 }
 
+/*Funkcja synchronizuje katalogi *srcPath oraz *destPath*/
 int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     DIR *source = NULL; 
     DIR *destination = NULL;  
@@ -627,10 +641,11 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
     free(srcDirFiles);
     free(destDirFiles); 
     free(srcDirectories);
-      
+
     return 0;
 }
 
+/*Funkcja jest handlerem sygnałów*/
 void SignalHandler(int signo) {
     switch(signo) {
         case SIGUSR1:
