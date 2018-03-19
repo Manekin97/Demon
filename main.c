@@ -26,15 +26,109 @@ int sleepInterval = 300;
 bool recursiveSearch = false;
 
 //  @TODO
-//  Poprawić syslogi
 //  Zostało jeszcze parę wycieków pamieci (Przy AppendToPath i listy(8B chuj wie czemu))
+
+/*LISTA*/
+typedef struct node {
+	char *filename;
+	struct node *next;
+} Node;
+
+typedef struct list {
+	Node *head;
+} List;
+
+Node *CreateNode(char *filename) {
+	Node *newNode = malloc(sizeof(Node));
+	newNode->filename = filename;
+	newNode->next = NULL;
+
+	return newNode;
+}
+
+List *InitList() {
+	List *list = malloc(sizeof(List));
+	list->head = NULL;
+
+	return list;
+}
+
+void Append(char *filename, List *list) {
+	Node *current = NULL;
+	if (list->head == NULL) {
+		list->head = CreateNode(filename);
+	}
+	else {
+		current = list->head;
+		while (current->next != NULL) {
+			current = current->next;
+		}
+
+		current->next = CreateNode(filename);
+	}
+}
+
+void Remove(char *filename, List *list) {
+	Node *current = list->head;
+	Node *previous = current;
+	while (current != NULL) {
+		if (current->filename == filename) {
+			previous->next = current->next;
+			if (current == list->head) {
+				list->head = current->next;
+			}
+
+			free(current);
+			return;
+		}
+
+		previous = current;
+		current = current->next;
+	}
+}
+
+void RemoveAt(Node *node, List *list) {
+	Node *current = node;
+	Node *previous = current;
+
+	previous->next = current->next;
+	if (current == list->head) {
+		list->head = current->next;
+	}
+
+	free(current);
+	return;
+}
+
+int Contains(List *list, char *name) {
+	Node *current = list->head;
+	while (current != NULL) {
+		if (strcmp(current->filename, name) == 0) {
+			return 1;
+		}
+
+		current = current->next;
+	}
+
+	return -1;
+}
+
+void DestroyList(List *list) {
+	Node *current;
+
+	while ((current = list->head) != NULL) {
+		list->head = list->head->next;
+		free(current);
+	}
+}
+/*LISTA*/
 
 /*Funkcja, która pobiera informacje o pliku *path i zwraca wskaźnik na struct stat*/
 struct stat *GetFileInfo(const char *path) {
 	struct stat *fileInfo = malloc(sizeof(struct stat));
 
 	if (stat(path, fileInfo) == -1) {
-		syslog(LOG_INFO, "stat(): %s (%s)", path, strerror(errno));
+		syslog(LOG_INFO, "stat(): \"%s\" (%s)", path, strerror(errno));
 		return NULL;
 	}
 
@@ -48,7 +142,7 @@ int SyncModTime(struct stat *fileInfo, const char *destPath) {
 	newTime.actime = time(NULL);    //  Ustaw datę doestępu na datę teraźniejszą
 	newTime.modtime = fileInfo->st_mtime;   //  Ustaw datę modyfiakcji na datę modyfikacji pliku źródłowego
 	if (utime(destPath, &newTime) == -1) {
-		syslog(LOG_INFO, "utime(): %s", strerror(errno));
+		syslog(LOG_INFO, "utime(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
@@ -61,11 +155,13 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 
 	int source = open(srcPath, O_RDONLY);
 	if (source == -1) {
+		syslog(LOG_INFO, "open(): \"%s\" (%s)", srcPath, strerror(errno));		
 		return -1;
 	}
 
 	off_t fileSize;
 	if (fstat(source, &fileInfo) == -1) {   //  Pobierz informację o pliku źródłowym
+		syslog(LOG_INFO, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 	else {
@@ -74,44 +170,54 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 
 	int destination = open(destPath, O_RDWR | O_CREAT, fileInfo.st_mode);
 	if (destination == -1) {
+		syslog(LOG_INFO, "open(): \"%s\" (%s)", destPath, strerror(errno));		
 		return -1;
 	}
 
 	int *srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0);  //  Stwórz odwzorowanie pliku źródłowego w pamięci
 	if (srcAddress == MAP_FAILED) {
+		syslog(LOG_INFO, "mmap(): \"%s\" (%s)", srcPath, strerror(errno));			
 		return -1;
 	}
 
 	if (ftruncate(destination, fileSize)) {  //  Zmniejsz rozmiar pliku docelowego do rozmiaru pliku źródłowego
+		syslog(LOG_INFO, "ftruncate(): \"%s\" (%s)", destPath, strerror(errno));					
 		return -1;
 	}
 
 	int *destAddress = mmap(NULL, fileSize, PROT_READ | PROT_WRITE, MAP_SHARED, destination, 0);    //  Stwórz odwzorowanie pliku docelowego w pamięci
 	if (destAddress == MAP_FAILED) {
+		syslog(LOG_INFO, "mmap(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
 	if (memcpy(destAddress, srcAddress, fileSize) == NULL) { //  Skopiuj zawartość odwzorowań
+		syslog(LOG_INFO, "memcpy(): \"%s\" to \"%s\" (%s)", srcPath, destPath, strerror(errno));			
 		return -1;
 	}
 
 	if (munmap(srcAddress, fileSize) == -1) {   //  Usuń odwzorowanie pliku źródłowego
+		syslog(LOG_INFO, "munmap(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	if (munmap(destAddress, fileSize) == -1) {   //  Usuń odwzorowanie pliku docelowego
+		syslog(LOG_INFO, "munmap(): \"%s\" (%s)", destPath, strerror(errno));	
 		return -1;
 	}
 
 	if (SyncModTime(&fileInfo, destPath) == -1) {    //  Ustaw datę modyfikacji pliku docelowego na datę modyfikacji pliku źródłowego
+		syslog(LOG_INFO, "SyncModTime(): \"%s\" (Could not synchronize modification time)", destPath);		
 		return -1;
 	}
 
 	if (close(source) == -1) {
+		syslog(LOG_INFO, "close(): \"%s\" (%s)", srcPath, strerror(errno));	
 		return -1;
 	}
 
 	if (close(destination) == -1) {
+		syslog(LOG_INFO, "close(): \"%s\" (%s)", destPath, strerror(errno));	
 		return -1;
 	}
 
@@ -125,15 +231,18 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 
 	int source = open(srcPath, O_RDONLY);
 	if (source == -1) {
+		syslog(LOG_INFO, "open(): \"%s\" (%s)", srcPath, strerror(errno));		
 		return -1;
 	}
 
 	if (fstat(source, &fileInfo) == -1) {
+		syslog(LOG_INFO, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));		
 		return -1;
 	}
 
 	int destination = open(destPath, O_WRONLY | O_CREAT | O_TRUNC, fileInfo.st_mode);
 	if (destination == -1) {
+		syslog(LOG_INFO, "open(): \"%s\" (%s)", destPath, strerror(errno));		
 		return -1;
 	}
 
@@ -145,28 +254,34 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 				continue;   //  Ponów próbę odczytu
 			}
 
+			syslog(LOG_INFO, "read(): \"%s\" (%s)", srcPath, strerror(errno));			
 			return -1;
 		}
 
 		bytesWritten = write(destination, &buffer, bytesRead);  //  Zapisz bytesRead odczytanych bajtów
 		if (bytesWritten == -1) {
+			syslog(LOG_INFO, "write(): \"%s\" (%s)", destPath, strerror(errno));					
 			return -1;
 		}
 
 		if (bytesRead != bytesWritten) {    //  Jeżeli zapisano inną ilość bajtów niż odczytano
+			syslog(LOG_INFO, "write(): \"%s\" (%s)", destPath, strerror(errno));			
 			return -1;
 		}
 	}
 
 	if (SyncModTime(&fileInfo, destPath) == -1) {    // Ustaw datę modyfikacji pliku docelowego na datę modyfikacji pliku źródłowego
+		syslog(LOG_INFO, "SyncModTime(): \"%s\" (Could not synchronize modification time)", destPath);									
 		return -1;
 	}
 
 	if (close(source) == -1) {
+		syslog(LOG_INFO, "close(): \"%s\" (%s)", srcPath, strerror(errno));		
 		return -1;
 	}
 
 	if (close(destination) == -1) {
+		syslog(LOG_INFO, "close(): \"%s\" (%s)", destPath, strerror(errno));		
 		return -1;
 	}
 
@@ -179,13 +294,13 @@ int Copy(const char *srcPath, const char *destPath) {
 
 	if (srcFileInfo->st_size < fileSizeThreshold) { //  Jeżeli rozmiar pliku jest mniejszy niż wartość progowa
 		if (RegularCopy(srcPath, destPath) == -1) { //  Skopiuj używając API linuxa
-			syslog(LOG_INFO, "RegularCopy(): Could not copy %s to %s", srcPath, destPath);
+			syslog(LOG_INFO, "RegularCopy(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);
 			return -1;
 		}
 	}
 	else {  //  jeżeli rozmiar pliku jest większy niż wartość progowa
 		if (MmapCopy(srcPath, destPath) == -1) {    //  Skopiuj używając odwzorowania w pamięci
-			syslog(LOG_INFO, "MmapCopy(): Could not copy %s to %s", srcPath, destPath);
+			syslog(LOG_INFO, "MmapCopy(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);
 			return -1;
 		}
 	}
@@ -198,6 +313,7 @@ int Copy(const char *srcPath, const char *destPath) {
 char *AppendToPath(const char *path, char *filename) {
 	char *newPath = malloc(PATH_MAX * sizeof(char));
 	if (sprintf(newPath, "%s/%s", path, filename) < 0) {
+		syslog(LOG_INFO, "sprintf(): Could not append \"%s\" to \"%s\"", filename, path);	
 		return NULL;
 	}
 
@@ -215,7 +331,7 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 		fullDestFilePath = AppendToPath(destDir, current->filename);
 
 		if (Copy(fullSrcFilePath, fullDestFilePath) == -1) {
-			syslog(LOG_INFO, "Copy(): Could not copy");
+			syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
 
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
@@ -223,7 +339,7 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 			return -1;
 		}
 
-		syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath);
+		syslog(LOG_INFO, "\"%s\" has been copied to \"%s\"", fullSrcFilePath, fullDestFilePath);
 
 		free(fullSrcFilePath);
 		free(fullDestFilePath);
@@ -241,13 +357,13 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 	while (current != NULL) {
 		fullPath = AppendToPath(path, current->filename);
 		if (remove(fullPath) == -1) {
-			syslog(LOG_INFO, "remove(): Could not remove %s", fullPath);
+			syslog(LOG_INFO, "remove(): \"%s\" (%s)", fullPath, strerror(errno));					
 			free(fullPath);
 
 			return -1;
 		}
 
-		syslog(LOG_INFO, "%s has been removed", fullPath);
+		syslog(LOG_INFO, "\"%s\" has been removed", fullPath);
 		current = current->next;
 	}
 
@@ -351,14 +467,22 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
 		if (srcFileInfo->d_type == DT_REG) { //  Jeżeli jest zwykłym plikiem
 			if (Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {   //  Skopiuj
-				syslog(LOG_INFO, "Copy(): \"%s\" could not be copied", AppendToPath(srcPath, srcFileInfo->d_name));
+				syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"",
+					AppendToPath(srcPath, srcFileInfo->d_name),
+					AppendToPath(destPath, srcFileInfo->d_name)
+				);
+
 				free(fileInfo);
 				return -1;
 			}
 		}
 		else if (srcFileInfo->d_type == DT_DIR) {    //  Jeżeli jest katalogiem
 			if (CopyDirectory(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {  // Rekrurencyjnie skopiuj katalog wraz z jego podkatalogami i plikami
-				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);
+				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"",
+					AppendToPath(srcPath, srcFileInfo->d_name),
+					AppendToPath(destPath, srcFileInfo->d_name)
+				);
+
 				free(fileInfo);
 				return -1;
 			}
@@ -568,7 +692,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 			if (Contains(srcDirectories, destFileInfo->d_name) == -1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
 				if (RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {   // To usuń go
-					syslog(LOG_INFO, "RemoveDirectory(): Could not remove directory");
+					syslog(LOG_INFO, "RemoveDirectory(): Could not remove \"%s\"", AppendToPath(destPath, destFileInfo->d_name));
 					return -1;
 				}
 			}
@@ -586,7 +710,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			current = nodePtr;
 		}
 		else if (result == 1) { //  Jeżeli wystąpił błąd
-			syslog(LOG_INFO, "FindAndCopy(): Could not copy files");
+			syslog(LOG_INFO, "FindAndCopy(): Could not copy files from \"%s\" to \"%s\"", srcPath, destPath);
 
 			free(srcDirFiles);
 			free(destDirFiles);
@@ -601,7 +725,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	/*Skopiuj wszytkie pliki pozostałe w liście srcDirFiles (czyli pliki, których nie ma w katalogu docelowym, ale sa w źródłowym) do katalogu docelowego*/
 	if (CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
-		syslog(LOG_INFO, "CopyAllFilesFromList(): Could not copy files.");
+		syslog(LOG_INFO, "CopyAllFilesFromList(): Could not copy files from \"%s\" to \"%s\".", srcPath, destPath);
 
 		free(srcDirFiles);
 		free(destDirFiles);
@@ -612,7 +736,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	/*Usuń wszytkie pliki pozostałe w liście destDirFiles (czyli pliki, których nie ma w katalogu źródłowym, ale są w docelowym) z katalogu docelowego*/
 	if (RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
-		syslog(LOG_INFO, "RemoveAllFilesFromList(): Could not remove files");
+		syslog(LOG_INFO, "RemoveAllFilesFromList(): Could not remove files from \"%s\"", destPath);
 
 		free(srcDirFiles);
 		free(destDirFiles);
@@ -623,7 +747,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	/*Zamknięcie plików i zwolnienie pamięci*/
 	if (closedir(source) == -1) {
-		syslog(LOG_INFO, "\"%s\" (%s)", srcPath, strerror(errno));
+		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
 
 		free(srcDirFiles);
 		free(destDirFiles);
@@ -633,7 +757,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	}
 
 	if (closedir(destination) == -1) {
-		syslog(LOG_INFO, "\"%s\" (%s)", destPath, strerror(errno));
+		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", destPath, strerror(errno));
 
 		free(srcDirFiles);
 		free(destDirFiles);
@@ -728,7 +852,7 @@ int main(int argc, char *const argv[]) {
 	// Daemonize();       
 
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%d",
-		recursiveSearch ? "true" : false,
+		recursiveSearch ? "true" : "false",
 		sleepInterval,
 		fileSizeThreshold);
 
