@@ -16,8 +16,6 @@
 #include <sys/mman.h> 
 #include <linux/fs.h> 
 
-#include "list.c"
-
 #define BUFFER_SIZE 131072
 #define MAX_SLEEP_TIME 86400
 
