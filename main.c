@@ -847,8 +847,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	Daemonize();    
-	// daemon(0, 0);   
+	Daemonize();  
 
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%d",
 		recursiveSearch ? "true" : "false",
