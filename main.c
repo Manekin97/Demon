@@ -408,7 +408,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 			fullSrcFilePath = AppendToPath(srcPath, filename);
 			fullDestFilePath = AppendToPath(destPath, filename);
 
-			if (CompareModTime(fullSrcFilePath, fullDestFilePath) != 0) {    //  Jeżeli czas modyfikacji się różni
+			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == -1) {    //  Jeżeli czas modyfikacji się różni
 				if (Copy(fullSrcFilePath, fullDestFilePath) == -1) { //  To skopiuj
 					syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
 					RemoveAt(current, list);    //  Usuń z listy
@@ -847,7 +847,8 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Daemonize();       
+	Daemonize();    
+	// daemon(0, 0);   
 
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%d",
 		recursiveSearch ? "true" : "false",
