@@ -178,7 +178,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 		return -1;
 	}
 
-	if (ftruncate(destination, fileSize)) {  //  Zmniejsz rozmiar pliku docelowego do rozmiaru pliku źródłowego
+	if (ftruncate(destination, fileSize) == -1) {  //  Zmniejsz rozmiar pliku docelowego do rozmiaru pliku źródłowego
 		syslog(LOG_INFO, "ftruncate(): \"%s\" (%s)", destPath, strerror(errno));					
 		return -1;
 	}
