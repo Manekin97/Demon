@@ -120,6 +120,8 @@ void DestroyList(List *list) {
 		list->head = list->head->next;
 		free(current);
 	}
+
+	free(list);
 }
 /*LISTA*/
 
