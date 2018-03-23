@@ -25,8 +25,6 @@ bool recursiveSearch = false;
 
 //  @TODO
 //  Zostały wycieki pamieci (listy i DIR*)
-// poprawić destroylist i używać zamiast free
-// w sumie kwedlo mówił, że nie muszę dealokować pamieci po błędzie jeżeli kończę program, więc moge wyjebać niepotrzebne free
 
 /*LISTA*/
 typedef struct node {
@@ -335,10 +333,6 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 
 		if (Copy(fullSrcFilePath, fullDestFilePath) == -1) {
 			syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
-
-			free(fullSrcFilePath);
-			free(fullDestFilePath);
-
 			return -1;
 		}
 
@@ -358,9 +352,7 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 	while (current != NULL) {
 		fullPath = AppendToPath(path, current->filename);
 		if (remove(fullPath) == -1) {
-			syslog(LOG_INFO, "remove(): \"%s\" (%s)", fullPath, strerror(errno));					
-			free(fullPath);
-
+			syslog(LOG_INFO, "remove(): \"%s\" (%s)", fullPath, strerror(errno));
 			return -1;
 		}
 
@@ -414,19 +406,11 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == -1) {    //  Jeżeli czas modyfikacji się różni
 				if (Copy(fullSrcFilePath, fullDestFilePath) == -1) { //  To skopiuj
 					syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
-
-					free(fullSrcFilePath);
-					free(fullDestFilePath);
-
 					return -1;
 				}
 			}
 
-			// RemoveAt(current, list);    //  Usuń  listy
 			Remove(current->filename, list);
-
-			free(fullSrcFilePath);
-			free(fullDestFilePath);
 
 			return 0;
 		}
@@ -453,14 +437,12 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
 	if (mkdir(destPath, fileInfo->st_mode) == -1) {	//	Stwórz nowy katalog
 		syslog(LOG_INFO, "mkdir(): \"%s\" (%s)", destPath, strerror(errno));
-		free(fileInfo);
 		return -1;
 	}
 
 	source = opendir(srcPath);
 	if (!source) {
 		syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno));
-		free(fileInfo);
 		return -1;
 	}
 
@@ -476,22 +458,12 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 		if (srcFileInfo->d_type == DT_REG) { //  Jeżeli jest zwykłym plikiem
 			if (Copy(newSrcPath, newDestPath) == -1) {   //  Skopiuj
 				syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", newSrcPath, newDestPath);
-
-				free(fileInfo);
-				free(newSrcPath);
-				free(newDestPath);
-
 				return -1;
 			}
 		}
 		else if (srcFileInfo->d_type == DT_DIR) {    //  Jeżeli jest katalogiem
 			if (CopyDirectory(newSrcPath, newDestPath) == -1) {  // Rekrurencyjnie skopiuj katalog wraz z jego podkatalogami i plikami
 				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", newSrcPath, newDestPath);
-
-				free(fileInfo);
-				free(newSrcPath);
-				free(newDestPath);
-
 				return -1;
 			}
 
@@ -501,11 +473,6 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 	
 	if (closedir(source) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
-
-		free(fileInfo);
-		free(newSrcPath);
-		free(newDestPath);
-
 		return -1;
 	}
 
@@ -538,20 +505,12 @@ int RemoveDirectory(const char *path) {
 		if (fileInfo->d_type == DT_REG) {    //  Jeżeli jest plikiem
 			if (remove(newPath) == -1) {    // Usuń plik
 				syslog(LOG_INFO, "remove(): \"%s\" (%s)", newPath, strerror(errno));
-
-				free(fileInfo);
-				free(newPath);
-
 				return -1;
 			}
 		}
 		else if (fileInfo->d_type == DT_DIR) {    //  Jeżeli jest katalogiem
 			if (RemoveDirectory(newPath) == -1) {   //  Rekurencyjnie usuń podkatalog wraz z jego podkatalogami
 				syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", newPath);
-
-				free(fileInfo);
-				free(newPath);
-						
 				return -1;
 			}
 		}
@@ -559,10 +518,6 @@ int RemoveDirectory(const char *path) {
 
 	if (remove(path) == -1) {    //  Usuń katalog
 		syslog(LOG_INFO, "remove(): \"%s\" (%s)", path, strerror(errno));
-
-		free(fileInfo);
-		free(newPath);
-
 		return -1;
 	}
 
@@ -570,10 +525,6 @@ int RemoveDirectory(const char *path) {
 
 	if (closedir(directory) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", path, strerror(errno));
-
-		free(fileInfo);
-		free(newPath);
-
 		return -1;
 	}
 
@@ -663,11 +614,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	source = opendir(srcPath);
 	if (!source) {
 		syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno));
-
-		free(srcDirFiles);
-		free(destDirFiles);
-		free(srcDirectories);
-
 		return -1;
 	}
 
@@ -676,11 +622,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		if (errno == ENOENT && recursiveSearch) {    // Jeżeli nie istnieje katalog destPath i włączona jest rekursywna synchronizacja
 			if (CopyDirectory(srcPath, destPath) == -1) {
 				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", srcPath, destPath);
-
-				free(srcDirFiles);
-				free(destDirFiles);
-				free(srcDirectories);
-
 				return -1;
 			}
 
@@ -688,11 +629,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		}
 		else {
 			syslog(LOG_INFO, "opendir(): \"%s\" (%s)", destPath, strerror(errno));
-
-			free(srcDirFiles);
-			free(destDirFiles);
-			free(srcDirectories);
-
 			return -1;
 		}
 	}
@@ -711,16 +647,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
 			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
-
 			if (SynchronizeDirectories(newSrcPath, newDestPath) == -1) { //  Synchronizuj podkatalogi
 				syslog(LOG_INFO, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\"", newSrcPath, newDestPath);
-
-				free(srcDirFiles);
-				free(destDirFiles);
-				free(srcDirectories);
-				free(newSrcPath);
-				free(newDestPath);
-
 				return -1;
 			}
 		}
@@ -740,13 +668,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);				
 				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
 					syslog(LOG_INFO, "RemoveDirectory(): Could not remove \"%s\"", newDestPath);
-
-					free(srcDirFiles);
-					free(destDirFiles);
-					free(srcDirectories);
-					free(newSrcPath);
-					free(newDestPath);
-
 					return -1;
 				}
 			}
@@ -765,13 +686,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		}
 		else if (result == -1) { //  Jeżeli wystąpił błąd
 			syslog(LOG_INFO, "FindAndCopy(): Could not copy files from \"%s\" to \"%s\"", srcPath, destPath);
-
-			free(srcDirFiles);
-			free(destDirFiles);
-			free(srcDirectories);
-			free(newSrcPath);
-			free(newDestPath);
-
 			return -1;
 		}
 		else {  //  Jeżeli pliki mają tą samą datę modyfikacji
@@ -782,57 +696,29 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	/*Skopiuj wszytkie pliki pozostałe w liście srcDirFiles (czyli pliki, których nie ma w katalogu docelowym, ale sa w źródłowym) do katalogu docelowego*/
 	if (CopyAllFilesFromList(srcDirFiles, srcPath, destPath) == -1) {
 		syslog(LOG_INFO, "CopyAllFilesFromList(): Could not copy files from \"%s\" to \"%s\".", srcPath, destPath);
-
-		free(srcDirFiles);
-		free(destDirFiles);
-		free(srcDirectories);
-		free(newSrcPath);
-		free(newDestPath);
-
 		return -1;
 	}
 
 	/*Usuń wszytkie pliki pozostałe w liście destDirFiles (czyli pliki, których nie ma w katalogu źródłowym, ale są w docelowym) z katalogu docelowego*/
 	if (RemoveAllFilesFromList(destDirFiles, destPath) == -1) {
 		syslog(LOG_INFO, "RemoveAllFilesFromList(): Could not remove files from \"%s\"", destPath);
-
-		free(srcDirFiles);
-		free(destDirFiles);
-		free(srcDirectories);
-		free(newSrcPath);
-		free(newDestPath);
-
 		return -1;
 	}
 
 	/*Zamknięcie plików i zwolnienie pamięci*/
 	if (closedir(source) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
-
-		free(srcDirFiles);
-		free(destDirFiles);
-		free(srcDirectories);
-		free(newSrcPath);
-		free(newDestPath);
-
 		return -1;
 	}
 
 	if (closedir(destination) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", destPath, strerror(errno));
-
-		free(srcDirFiles);
-		free(destDirFiles);
-		free(srcDirectories);
-		free(newSrcPath);
-		free(newDestPath);
-
 		return -1;
 	}
 
-	free(srcDirFiles);
-	free(destDirFiles);
-	free(srcDirectories);
+	DestroyList(srcDirFiles);
+	DestroyList(destDirFiles);
+	DestroyList(srcDirectories);	
 	free(newSrcPath);
 	free(newDestPath);
 
