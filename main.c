@@ -24,7 +24,9 @@ int sleepInterval = 300;
 bool recursiveSearch = false;
 
 //  @TODO
-//  Zostało jeszcze parę wycieków pamieci (Przy AppendToPath i listy(8B chuj wie czemu))
+//  Zostały wycieki pamieci (listy i DIR*)
+// poprawić destroylist i używać zamiast free
+// w sumie kwedlo mówił, że nie muszę dealokować pamieci po błędzie jeżeli kończę program, więc moge wyjebać niepotrzebne free
 
 /*LISTA*/
 typedef struct node {
@@ -444,6 +446,9 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
 	struct stat *fileInfo = GetFileInfo(srcPath);
 
+	char *newSrcPath = NULL;
+	char *newDestPath = NULL;
+
 	if (mkdir(destPath, fileInfo->st_mode) == -1) {	//	Stwórz nowy katalog
 		syslog(LOG_INFO, "mkdir(): \"%s\" (%s)", destPath, strerror(errno));
 		free(fileInfo);
@@ -463,42 +468,49 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 			continue;
 		}
 
+		newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
+		newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
+
 		if (srcFileInfo->d_type == DT_REG) { //  Jeżeli jest zwykłym plikiem
-			if (Copy(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {   //  Skopiuj
-				syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"",
-					AppendToPath(srcPath, srcFileInfo->d_name),
-					AppendToPath(destPath, srcFileInfo->d_name)
-				);
+			if (Copy(newSrcPath, newDestPath) == -1) {   //  Skopiuj
+				syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", newSrcPath, newDestPath);
 
 				free(fileInfo);
+				free(newSrcPath);
+				free(newDestPath);
+
 				return -1;
 			}
 		}
 		else if (srcFileInfo->d_type == DT_DIR) {    //  Jeżeli jest katalogiem
-			if (CopyDirectory(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) {  // Rekrurencyjnie skopiuj katalog wraz z jego podkatalogami i plikami
-				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"",
-					AppendToPath(srcPath, srcFileInfo->d_name),
-					AppendToPath(destPath, srcFileInfo->d_name)
-				);
+			if (CopyDirectory(newSrcPath, newDestPath) == -1) {  // Rekrurencyjnie skopiuj katalog wraz z jego podkatalogami i plikami
+				syslog(LOG_INFO, "CopyDirectory(): Could not copy \"%s\" to \"%s\"", newSrcPath, newDestPath);
 
 				free(fileInfo);
+				free(newSrcPath);
+				free(newDestPath);
+
 				return -1;
 			}
 
-			syslog(LOG_INFO, "Directory \"%s\" has been copied to \"%s\"",
-				AppendToPath(srcPath, srcFileInfo->d_name),
-				AppendToPath(destPath, srcFileInfo->d_name)
-			);					
+			syslog(LOG_INFO, "Directory \"%s\" has been copied to \"%s\"", newSrcPath, newDestPath);				
 		}
 	}
 	
 	if (closedir(source) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
+
 		free(fileInfo);
+		free(newSrcPath);
+		free(newDestPath);
+
 		return -1;
 	}
 
 	free(fileInfo);
+	free(newSrcPath);
+	free(newDestPath);
+
 	return 0;
 }
 
@@ -506,6 +518,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 int RemoveDirectory(const char *path) {
 	DIR *directory = NULL;
 	struct dirent *fileInfo = NULL;
+	char *newPath = NULL;
 
 	directory = opendir(path);
 	if (!directory) {
@@ -518,16 +531,25 @@ int RemoveDirectory(const char *path) {
 		if (strcmp(fileInfo->d_name, ".") == 0 || strcmp(fileInfo->d_name, "..") == 0) { //  Pomiń katalogi "." i ".."
 			continue;
 		}
-
+		
+		newPath = AppendToPath(path, fileInfo->d_name);
 		if (fileInfo->d_type == DT_REG) {    //  Jeżeli jest plikiem
-			if (remove(AppendToPath(path, fileInfo->d_name)) == -1) {    // Usuń plik
-				syslog(LOG_INFO, "remove(): \"%s\" (%s)", AppendToPath(path, fileInfo->d_name), strerror(errno));
+			if (remove(newPath) == -1) {    // Usuń plik
+				syslog(LOG_INFO, "remove(): \"%s\" (%s)", newPath, strerror(errno));
+
+				free(fileInfo);
+				free(newPath);
+
 				return -1;
 			}
 		}
 		else if (fileInfo->d_type == DT_DIR) {    //  Jeżeli jest katalogiem
-			if (RemoveDirectory(AppendToPath(path, fileInfo->d_name)) == -1) {   //  Rekurencyjnie usuń podkatalog wraz z jego podkatalogami
-				syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", AppendToPath(path, fileInfo->d_name));
+			if (RemoveDirectory(newPath) == -1) {   //  Rekurencyjnie usuń podkatalog wraz z jego podkatalogami
+				syslog(LOG_INFO, "RemoveDirectory(): Could not remove %s", newPath);
+
+				free(fileInfo);
+				free(newPath);
+						
 				return -1;
 			}
 		}
@@ -535,6 +557,10 @@ int RemoveDirectory(const char *path) {
 
 	if (remove(path) == -1) {    //  Usuń katalog
 		syslog(LOG_INFO, "remove(): \"%s\" (%s)", path, strerror(errno));
+
+		free(fileInfo);
+		free(newPath);
+
 		return -1;
 	}
 
@@ -542,8 +568,15 @@ int RemoveDirectory(const char *path) {
 
 	if (closedir(directory) == -1) {
 		syslog(LOG_INFO, "closedir(): \"%s\" (%s)", path, strerror(errno));
+
+		free(fileInfo);
+		free(newPath);
+
 		return -1;
 	}
+
+	free(fileInfo);
+	free(newPath);
 
 	return 0;
 }
@@ -620,6 +653,9 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	List *destDirFiles = InitList();
 	List *srcDirectories = InitList();
 
+	char *newSrcPath = NULL;
+	char *newDestPath = NULL;
+
 	Node *nodePtr;
 
 	source = opendir(srcPath);
@@ -671,15 +707,17 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		else if (srcFileInfo->d_type == DT_DIR && recursiveSearch) { //  Jeżeli jest katalogiem i włączona jest opcja rekursywnej synchronizacji
 			Append(srcFileInfo->d_name, srcDirectories);    //  Dołącz do listy
 
-			if (SynchronizeDirectories(AppendToPath(srcPath, srcFileInfo->d_name), AppendToPath(destPath, srcFileInfo->d_name)) == -1) { //  Synchronizuj podkatalogi
-				syslog(LOG_INFO, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\"",
-					AppendToPath(srcPath, srcFileInfo->d_name),
-					AppendToPath(destPath, srcFileInfo->d_name)
-				);
+			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
+			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
+
+			if (SynchronizeDirectories(newSrcPath, newDestPath) == -1) { //  Synchronizuj podkatalogi
+				syslog(LOG_INFO, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\"", newSrcPath, newDestPath);
 
 				free(srcDirFiles);
 				free(destDirFiles);
 				free(srcDirectories);
+				free(newSrcPath);
+				free(newDestPath);
 
 				return -1;
 			}
@@ -697,12 +735,15 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			}
 
 			if (Contains(srcDirectories, destFileInfo->d_name) == -1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
-				if (RemoveDirectory(AppendToPath(destPath, destFileInfo->d_name)) == -1) {   // To usuń go
-					syslog(LOG_INFO, "RemoveDirectory(): Could not remove \"%s\"", AppendToPath(destPath, destFileInfo->d_name));
+				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);				
+				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
+					syslog(LOG_INFO, "RemoveDirectory(): Could not remove \"%s\"", newDestPath);
 
 					free(srcDirFiles);
 					free(destDirFiles);
 					free(srcDirectories);
+					free(newSrcPath);
+					free(newDestPath);
 
 					return -1;
 				}
@@ -726,6 +767,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			free(srcDirFiles);
 			free(destDirFiles);
 			free(srcDirectories);
+			free(newSrcPath);
+			free(newDestPath);
 
 			return -1;
 		}
@@ -741,6 +784,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		free(srcDirFiles);
 		free(destDirFiles);
 		free(srcDirectories);
+		free(newSrcPath);
+		free(newDestPath);
 
 		return -1;
 	}
@@ -752,6 +797,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		free(srcDirFiles);
 		free(destDirFiles);
 		free(srcDirectories);
+		free(newSrcPath);
+		free(newDestPath);
 
 		return -1;
 	}
@@ -763,6 +810,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		free(srcDirFiles);
 		free(destDirFiles);
 		free(srcDirectories);
+		free(newSrcPath);
+		free(newDestPath);
 
 		return -1;
 	}
@@ -773,6 +822,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		free(srcDirFiles);
 		free(destDirFiles);
 		free(srcDirectories);
+		free(newSrcPath);
+		free(newDestPath);
 
 		return -1;
 	}
@@ -780,6 +831,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	free(srcDirFiles);
 	free(destDirFiles);
 	free(srcDirectories);
+	free(newSrcPath);
+	free(newDestPath);
 
 	return 0;
 }
@@ -856,7 +909,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Daemonize();  
+	Daemonize();  
 
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB",
 		recursiveSearch ? "true" : "false",
