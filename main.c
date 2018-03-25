@@ -440,6 +440,8 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 		return -1;
 	}
 
+	syslog(LOG_INFO, "Directory \"%s\" has been created", destPath);		
+
 	source = opendir(srcPath);
 	if (!source) {
 		syslog(LOG_INFO, "opendir(): \"%s\" (%s)", srcPath, strerror(errno));
@@ -469,6 +471,9 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 
 			syslog(LOG_INFO, "Directory \"%s\" has been copied to \"%s\"", newSrcPath, newDestPath);				
 		}
+
+		free(newSrcPath);
+		free(newDestPath);
 	}
 	
 	if (closedir(source) == -1) {
@@ -477,8 +482,6 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 	}
 
 	free(fileInfo);
-	free(newSrcPath);
-	free(newDestPath);
 
 	return 0;
 }
@@ -797,7 +800,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	Daemonize();  
+	// Daemonize();  
 
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB",
 		recursiveSearch ? "true" : "false",
