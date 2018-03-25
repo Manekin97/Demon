@@ -411,16 +411,15 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 			}
 
 			Remove(current->filename, list);
-
+			
+			free(fullSrcFilePath);
+			free(fullDestFilePath);
 			return 0;
 		}
 		else {
 			current = current->next;
 		}
 	}
-
-	free(fullSrcFilePath);
-	free(fullDestFilePath);
 
 	return 1;
 }
