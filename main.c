@@ -171,9 +171,8 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 		syslog(LOG_INFO, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
-	else {
-		fileSize = fileInfo.st_size;
-	}
+	
+	fileSize = fileInfo.st_size;
 
 	int destination = open(destPath, O_RDWR | O_CREAT, fileInfo.st_mode);
 	if (destination == -1) {
