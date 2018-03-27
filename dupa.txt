@@ -1,0 +1,32 @@
+
+int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
+    char *fullSrcFilePath = NULL;
+    char *fullDestFilePath = NULL;
+    struct stat *fileInfo = NULL;    
+    
+    Node *current = list->head;
+    while(current != NULL) { 
+        fullSrcFilePath = AppendToPath(srcDir, current->filename); 
+        fullDestFilePath = AppendToPath(destDir, current->filename);       
+        fileInfo = GetFileInfo(fullSrcFilePath);    
+        
+        if(Copy(fullSrcFilePath, fullDestFilePath) == -1) {
+            syslog(LOG_INFO, "Copy(): Could not copy"); 
+
+            free(fullSrcFilePath);
+            free(fullDestFilePath);
+            free(fileInfo); 
+
+            return -1;
+        }
+
+        syslog(LOG_INFO, "%s has been copied to %s", fullSrcFilePath, fullDestFilePath); 
+        current = current->next;                       
+    }
+
+    free(fullSrcFilePath);
+    free(fullDestFilePath);
+    free(fileInfo);    
+
+    return 0;
+}
