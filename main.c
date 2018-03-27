@@ -27,15 +27,16 @@ bool recursiveSearch = false;
 //  Zostały wycieki pamieci (listy i DIR*)
 
 /*LISTA*/
-typedef struct node {
+typedef struct node {	//	Struktura elementu listy
 	char *filename;
 	struct node *next;
 } Node;
 
-typedef struct list {
+typedef struct list {	//	Struktura listy
 	Node *head;
 } List;
 
+/*Funkcja tworząca nowy element listy*/
 Node *CreateNode(char *filename) {
 	Node *newNode = malloc(sizeof(Node));
 	newNode->filename = filename;
@@ -44,6 +45,7 @@ Node *CreateNode(char *filename) {
 	return newNode;
 }
 
+/*Funkcja inicializująca listę*/
 List *InitList() {
 	List *list = malloc(sizeof(List));
 	list->head = NULL;
@@ -51,6 +53,7 @@ List *InitList() {
 	return list;
 }
 
+/*Funkcja dołączająca element filename na koniec listy list*/
 void Append(char *filename, List *list) {
 	Node *current = NULL;
 	if (list->head == NULL) {
@@ -66,6 +69,7 @@ void Append(char *filename, List *list) {
 	}
 }
 
+/*Funkcja usuwająca elementz listy list, który przechowuje filename*/
 void Remove(char *filename, List *list) {
 	Node *current = list->head;
 	Node *previous = current;
@@ -85,19 +89,7 @@ void Remove(char *filename, List *list) {
 	}
 }
 
-void RemoveAt(Node *node, List *list) {
-	Node *current = node;
-	Node *previous = current;
-
-	previous->next = current->next;
-	if (current == list->head) {
-		list->head = current->next;
-	}
-
-	free(current);
-	return;
-}
-
+/*Funkcja, która zwraca informację, czy list list zawiera plik o nazwie name*/
 int Contains(List *list, char *name) {
 	Node *current = list->head;
 	while (current != NULL) {
@@ -111,6 +103,7 @@ int Contains(List *list, char *name) {
 	return -1;
 }
 
+/*Funkcja niszczy liste list i dealokuje pamięć*/
 void DestroyList(List *list) {
 	Node *current;
 
@@ -120,6 +113,20 @@ void DestroyList(List *list) {
 	}
 
 	free(list);
+}
+
+/*Funkcja usuwa element node z listy list*/
+void RemoveAt(Node *node, List *list) {
+	Node *current = node;
+	Node *previous = current;
+
+	previous->next = current->next;
+	if (current == list->head) {
+		list->head = current->next;
+	}
+
+	free(current);
+	return;
 }
 /*LISTA*/
 
@@ -135,7 +142,7 @@ struct stat *GetFileInfo(const char *path) {
 	return fileInfo;
 }
 
-/*Funkcja, która ustawia czas modyfikacji do pliku *destPath zgodnie z *fileInfo i czas dostępu na aktualny czas*/
+/*Funkcja, która ustawia czas modyfikacji do pliku destPath zgodnie z fileInfo i czas dostępu na aktualny czas*/
 int SyncModTime(struct stat *fileInfo, const char *destPath) {
 	struct utimbuf newTime;
 
@@ -149,7 +156,7 @@ int SyncModTime(struct stat *fileInfo, const char *destPath) {
 	return 0;
 }
 
-/*Funkcja kopiująca plik *srcPath do *destPath, używając odwzorowania w pamięci*/
+/*Funkcja kopiująca plik srcPath do destPath, używając odwzorowania w pamięci*/
 int MmapCopy(const char *srcPath, const char *destPath) {
 	struct stat fileInfo;
 
@@ -224,7 +231,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 	return 0;
 }
 
-/*Funkcja kopiująca plik *srcPath do *destPath, używając API Linuxa*/
+/*Funkcja kopiująca plik srcPath do destPath, używając API Linuxa*/
 int RegularCopy(const char *srcPath, const char *destPath) {
 	char buffer[BUFFER_SIZE];
 	struct stat fileInfo;
@@ -288,7 +295,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 	return 0;
 }
 
-/*Funkcja kopiująca plik *srcPath do *destPath, na podstawie rozmiaru pliku decyduje w jaki sposób plik zostanie skopiowany*/
+/*Funkcja kopiująca plik srcPath do destPath, na podstawie rozmiaru pliku decyduje w jaki sposób plik zostanie skopiowany*/
 int Copy(const char *srcPath, const char *destPath) {
 	struct stat *srcFileInfo = GetFileInfo(srcPath);
 
@@ -310,7 +317,7 @@ int Copy(const char *srcPath, const char *destPath) {
 	return 0;
 }
 
-/*Funkcja dołącza nazwę pliku *filename do ściezki *path*/
+/*Funkcja dołącza nazwę pliku filename do ściezki path*/
 char *AppendToPath(const char *path, const char *filename) {
 	char *newPath = malloc(PATH_MAX * sizeof(char));
 	if (sprintf(newPath, "%s/%s", path, filename) < 0) {
@@ -321,7 +328,7 @@ char *AppendToPath(const char *path, const char *filename) {
 	return newPath;
 }
 
-/*Funkcja kopiuje wszystkie pliki znajdujące się na liście *list do katalogu *destDir*/
+/*Funkcja kopiuje wszystkie pliki znajdujące się na liście list do katalogu *destDir*/
 int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 	char *fullSrcFilePath = NULL;
 	char *fullDestFilePath = NULL;
@@ -344,7 +351,7 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 	return 0;
 }
 
-/*Funkcja usuwa wszystkie pliki znajdujące się na liście *list z katalogu *path*/
+/*Funkcja usuwa wszystkie pliki znajdujące się na liście list z katalogu *path*/
 int RemoveAllFilesFromList(List *list, const char *path) {
 	char *fullPath = NULL;
 
@@ -364,7 +371,7 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 	return 0;
 }
 
-/*Funkcja porównuje czas modyfikacji pliku *srcPath oraz *destPath*/
+/*Funkcja porównuje czas modyfikacji pliku srcPath oraz destPath*/
 int CompareModTime(const char *srcPath, const char *destPath) {
 	struct stat *srcFileInfo = NULL;
 	struct stat *destFileInfo = NULL;
@@ -392,7 +399,7 @@ int CompareModTime(const char *srcPath, const char *destPath) {
 	}
 }
 
-/*Funkcja znajduje plik w liście *list o nazwie *filename i kopiuje go do *destPath jeżeli jego czas modyfikacji różni się od czasu modyfikacji pliku *srcPath*/
+/*Funkcja znajduje plik w liście list o nazwie filename i kopiuje go do destPath jeżeli jego czas modyfikacji różni się od czasu modyfikacji pliku srcPath*/
 int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *filename) {
 	char *fullSrcFilePath = NULL;
 	char *fullDestFilePath = NULL;
@@ -403,14 +410,14 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 			fullSrcFilePath = AppendToPath(srcPath, filename);
 			fullDestFilePath = AppendToPath(destPath, filename);
 
-			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == -1) {    //  Jeżeli czas modyfikacji się różni
+			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == 1) {    //  Jeżeli plik źródłowy ma późniejszą date modyfikacji
 				if (Copy(fullSrcFilePath, fullDestFilePath) == -1) { //  To skopiuj
 					syslog(LOG_INFO, "Copy(): Could not copy \"%s\" to \"%s\"", fullSrcFilePath, fullDestFilePath);
 					return -1;
 				}
 			}
 
-			Remove(current->filename, list);
+			Remove(current->filename, list);	//	Usuń z listy
 			
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
@@ -424,7 +431,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 	return 1;
 }
 
-/*Funkcja rekurencyjnie kopiuje katalog *path wraz z jego plikami oraz podkatalogami*/
+/*Funkcja rekurencyjnie kopiuje katalog path wraz z jego plikami oraz podkatalogami*/
 int CopyDirectory(const char *srcPath, const char *destPath) {
 	struct dirent *srcFileInfo = NULL;
 	DIR *source = NULL;
@@ -485,7 +492,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 	return 0;
 }
 
-/*Funkcja rekurencyjnie usuwa katalog *path wraz z jego plikami oraz podkatalogami*/
+/*Funkcja rekurencyjnie usuwa katalog path wraz z jego plikami oraz podkatalogami*/
 int RemoveDirectory(const char *path) {
 	DIR *directory = NULL;
 	struct dirent *fileInfo = NULL;
@@ -780,22 +787,22 @@ int main(int argc, char *const argv[]) {
 	}
 
 	if (stat(srcPath, &srcDirInfo) == -1) {  //  Pobranie informacji o katalogu srcPath
-		perror("stat");
+		printf("\"%s\" does not exist\n", srcPath);
 		exit(EXIT_FAILURE);
 	}
 
 	if (stat(destPath, &destDirInfo) == -1) {  //  Pobranie informacji o katalogu destPath
-		perror("stat");
+		printf("\"%s\" does not exist\n", destPath);		
 		exit(EXIT_FAILURE);
 	}
 
 	if (!S_ISDIR(srcDirInfo.st_mode)) {  //  Sprawdzanie, czy srcPath jest katalogiem
-		printf("\"%s\" is not a directory", srcPath);
+		printf("\"%s\" is not a directory\n", srcPath);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!S_ISDIR(destDirInfo.st_mode)) {  //  Sprawdzanie, czy destPath jest katalogiem
-		printf("\"%s\" is not a directory", destPath);
+		printf("\"%s\" is not a directory\n", destPath);
 		exit(EXIT_FAILURE);
 	}
 
@@ -804,7 +811,8 @@ int main(int argc, char *const argv[]) {
 	syslog(LOG_INFO, "Deamon started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB",
 		recursiveSearch ? "true" : "false",
 		sleepInterval,
-		fileSizeThreshold);
+		fileSizeThreshold
+	);
 
 	while (1) {
 		if (SynchronizeDirectories(srcPath, destPath) == -1) {
