@@ -139,7 +139,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 
 	int source = open(srcPath, O_RDONLY);
 	if (source == -1) {
-		syslog(LOG_ERR, "open(): \"%s\" (%s)", srcPath, strerror(errno));		
+		syslog(LOG_ERR, "open(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
@@ -148,23 +148,23 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 		syslog(LOG_ERR, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
-	
+
 	fileSize = fileInfo.st_size;	//	Pobierz rozmiar pliku źródłowego
 
 	int destination = open(destPath, O_RDWR | O_CREAT, fileInfo.st_mode);
 	if (destination == -1) {
-		syslog(LOG_ERR, "open(): \"%s\" (%s)", destPath, strerror(errno));		
+		syslog(LOG_ERR, "open(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
 	int *srcAddress = mmap(NULL, fileSize, PROT_READ, MAP_PRIVATE, source, 0);  //  Stwórz odwzorowanie pliku źródłowego w pamięci
 	if (srcAddress == MAP_FAILED) {
-		syslog(LOG_ERR, "mmap(): \"%s\" (%s)", srcPath, strerror(errno));			
+		syslog(LOG_ERR, "mmap(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	if (ftruncate(destination, fileSize) == -1) {  //  Zmień rozmiar pliku docelowego na rozmiaru pliku źródłowego
-		syslog(LOG_ERR, "ftruncate(): \"%s\" (%s)", destPath, strerror(errno));					
+		syslog(LOG_ERR, "ftruncate(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
@@ -175,7 +175,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 	}
 
 	if (memcpy(destAddress, srcAddress, fileSize) == NULL) { //  Skopiuj zawartość odwzorowań
-		syslog(LOG_ERR, "memcpy(): \"%s\" to \"%s\" (%s)", srcPath, destPath, strerror(errno));			
+		syslog(LOG_ERR, "memcpy(): \"%s\" to \"%s\" (%s)", srcPath, destPath, strerror(errno));
 		return -1;
 	}
 
@@ -185,23 +185,23 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 	}
 
 	if (munmap(destAddress, fileSize) == -1) {   //  Usuń odwzorowanie pliku docelowego
-		syslog(LOG_ERR, "munmap(): \"%s\" (%s)", destPath, strerror(errno));	
+		syslog(LOG_ERR, "munmap(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
 	if (SyncModTime(&fileInfo, destPath) == -1) {    //  Ustaw datę modyfikacji pliku docelowego na datę modyfikacji pliku źródłowego
-		syslog(LOG_ERR, "SyncModTime(): \"%s\" Could not synchronize modification time.", destPath);		
+		syslog(LOG_ERR, "SyncModTime(): \"%s\" Could not synchronize modification time.", destPath);
 		return -1;
 	}
 
-	/*Zamknij deskryptory*/	
+	/*Zamknij deskryptory*/
 	if (close(source) == -1) {
-		syslog(LOG_ERR, "close(): \"%s\" (%s)", srcPath, strerror(errno));	
+		syslog(LOG_ERR, "close(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	if (close(destination) == -1) {
-		syslog(LOG_ERR, "close(): \"%s\" (%s)", destPath, strerror(errno));	
+		syslog(LOG_ERR, "close(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
@@ -215,18 +215,18 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 
 	int source = open(srcPath, O_RDONLY);
 	if (source == -1) {
-		syslog(LOG_ERR, "open(): \"%s\" (%s)", srcPath, strerror(errno));		
+		syslog(LOG_ERR, "open(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	if (fstat(source, &fileInfo) == -1) {
-		syslog(LOG_ERR, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));		
+		syslog(LOG_ERR, "fstat(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	int destination = open(destPath, O_WRONLY | O_CREAT | O_TRUNC, fileInfo.st_mode);
 	if (destination == -1) {
-		syslog(LOG_ERR, "open(): \"%s\" (%s)", destPath, strerror(errno));		
+		syslog(LOG_ERR, "open(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
@@ -238,35 +238,35 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 				continue;   //  Ponów próbę odczytu
 			}
 
-			syslog(LOG_ERR, "read(): \"%s\" (%s)", srcPath, strerror(errno));			
+			syslog(LOG_ERR, "read(): \"%s\" (%s)", srcPath, strerror(errno));
 			return -1;
 		}
 
 		bytesWritten = write(destination, &buffer, bytesRead);  //  Zapisz bytesRead odczytanych bajtów
 		if (bytesWritten == -1) {
-			syslog(LOG_ERR, "write(): \"%s\" (%s)", destPath, strerror(errno));					
+			syslog(LOG_ERR, "write(): \"%s\" (%s)", destPath, strerror(errno));
 			return -1;
 		}
 
 		if (bytesRead != bytesWritten) {    //  Jeżeli zapisano inną ilość bajtów niż odczytano
-			syslog(LOG_ERR, "write(): \"%s\" (%s)", destPath, strerror(errno));			
+			syslog(LOG_ERR, "write(): \"%s\" (%s)", destPath, strerror(errno));
 			return -1;
 		}
 	}
 
 	if (SyncModTime(&fileInfo, destPath) == -1) {    // Ustaw datę modyfikacji pliku docelowego na datę modyfikacji pliku źródłowego
-		syslog(LOG_ERR, "SyncModTime(): \"%s\" Could not synchronize modification time.", destPath);									
+		syslog(LOG_ERR, "SyncModTime(): \"%s\" Could not synchronize modification time.", destPath);
 		return -1;
 	}
 
 	/*Zamknij deskryptory*/
 	if (close(source) == -1) {
-		syslog(LOG_ERR, "close(): \"%s\" (%s)", srcPath, strerror(errno));		
+		syslog(LOG_ERR, "close(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
 	}
 
 	if (close(destination) == -1) {
-		syslog(LOG_ERR, "close(): \"%s\" (%s)", destPath, strerror(errno));		
+		syslog(LOG_ERR, "close(): \"%s\" (%s)", destPath, strerror(errno));
 		return -1;
 	}
 
@@ -290,7 +290,7 @@ int Copy(const char *srcPath, const char *destPath) {
 		}
 	}
 
-	syslog(LOG_INFO, "File \"%s\" has been copied to \"%s\".", srcPath, destPath);	
+	syslog(LOG_INFO, "File \"%s\" has been copied to \"%s\".", srcPath, destPath);
 	free(srcFileInfo);
 	return 0;
 }
@@ -299,7 +299,7 @@ int Copy(const char *srcPath, const char *destPath) {
 char *AppendToPath(const char *path, const char *filename) {
 	char *newPath = malloc(PATH_MAX * sizeof(char));
 	if (sprintf(newPath, "%s/%s", path, filename) < 0) {
-		syslog(LOG_ERR, "sprintf(): Could not append \"%s\" to \"%s\".", filename, path);	
+		syslog(LOG_ERR, "sprintf(): Could not append \"%s\" to \"%s\".", filename, path);
 		return NULL;
 	}
 
@@ -396,7 +396,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 			}
 
 			RemoveAt(current, list);	//	Usuń z listy
-			
+
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
 			return 0;
@@ -424,7 +424,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 		return -1;
 	}
 
-	syslog(LOG_INFO, "Directory \"%s\" has been created.", destPath);		
+	syslog(LOG_INFO, "Directory \"%s\" has been created.", destPath);
 
 	source = opendir(srcPath);
 	if (!source) {
@@ -453,13 +453,13 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 				return -1;
 			}
 
-			syslog(LOG_INFO, "Directory \"%s\" has been copied to \"%s\".", newSrcPath, newDestPath);				
+			syslog(LOG_INFO, "Directory \"%s\" has been copied to \"%s\".", newSrcPath, newDestPath);
 		}
 
 		free(newSrcPath);
 		free(newDestPath);
 	}
-	
+
 	if (closedir(source) == -1) {
 		syslog(LOG_ERR, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
 		return -1;
@@ -487,7 +487,7 @@ int RemoveDirectory(const char *path) {
 		if (strcmp(fileInfo->d_name, ".") == 0 || strcmp(fileInfo->d_name, "..") == 0) { //  Pomiń katalogi "." i ".."
 			continue;
 		}
-		
+
 		newPath = AppendToPath(path, fileInfo->d_name);
 		if (fileInfo->d_type == DT_REG) {    //  Jeżeli jest plikiem
 			if (remove(newPath) == -1) {    // Usuń plik
@@ -560,14 +560,14 @@ void Daemonize() {
 
 	for (int i = 0; i < sysconf(_SC_OPEN_MAX); i++) {   //  Zamknij wszystkie deskryptory
 		tmp = close(i);
-		
-		if(errno == EBADF) {	// Jeżeli był to zły dekryptor to wyjdź z pętli (zamknięto wszystkie deskryptory)
+
+		if (errno == EBADF) {	// Jeżeli był to zły dekryptor to wyjdź z pętli (zamknięto wszystkie deskryptory)
 			break;
 		}
 
 		if (tmp == -1) {
-		    syslog(LOG_INFO, "%s, %d", strerror(errno), errno);   
-		    exit(EXIT_FAILURE);
+			syslog(LOG_INFO, "%s, %d", strerror(errno), errno);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -667,7 +667,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			}
 
 			if (Contains(srcDirectories, destFileInfo->d_name) == -1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
-				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);				
+				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
 				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
 					syslog(LOG_ERR, "RemoveDirectory(): Could not remove \"%s\".", newDestPath);
 					return -1;
@@ -720,7 +720,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	DestroyList(srcDirFiles);
 	DestroyList(destDirFiles);
-	DestroyList(srcDirectories);	
+	DestroyList(srcDirectories);
 	free(newSrcPath);
 	free(newDestPath);
 
@@ -741,7 +741,7 @@ void SignalHandler(int signo) {
 }
 
 int main(int argc, char *const argv[]) {
-	const char *appName = strncmp(argv[0], "./", 2) == 0 ? (argv[0] + 2 * sizeof(char)): argv[0];
+	const char *appName = strncmp(argv[0], "./", 2) == 0 ? (argv[0] + 2 * sizeof(char)) : argv[0];
 	const char *srcPath = argv[1];
 	const char *destPath = argv[2];
 
@@ -787,7 +787,7 @@ int main(int argc, char *const argv[]) {
 	}
 
 	if (stat(destPath, &destDirInfo) == -1) {  //  Pobranie informacji o katalogu destPath
-		printf("\"%s\" does not exist.\n", destPath);		
+		printf("\"%s\" does not exist.\n", destPath);
 		exit(EXIT_FAILURE);
 	}
 
@@ -801,7 +801,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Daemonize();  
+	Daemonize();
 
 	syslog(LOG_INFO, "%s started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB.",
 		appName,
@@ -812,7 +812,7 @@ int main(int argc, char *const argv[]) {
 
 	while (1) {
 		syslog(LOG_INFO, "Synchronizing directories \"%s\" and \"%s\".", srcPath, destPath);
-		
+
 		if (SynchronizeDirectories(srcPath, destPath) == -1) {
 			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process terminated.");
 			exit(EXIT_FAILURE);
