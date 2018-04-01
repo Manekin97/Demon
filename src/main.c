@@ -23,9 +23,6 @@ int fileSizeThreshold = 4096;
 int sleepInterval = 300;
 bool recursiveSearch = false;
 
-//  @TODO
-//  Zostały wycieki pamieci (listy i DIR*)
-
 /*LISTA*/
 typedef struct node {	//	Struktura elementu listy
 	char *filename;
@@ -66,26 +63,6 @@ void Append(char *filename, List *list) {
 		}
 
 		current->next = CreateNode(filename);
-	}
-}
-
-/*Funkcja usuwająca element z listy list, zawierający filename*/
-void Remove(char *filename, List *list) {
-	Node *current = list->head;
-	Node *previous = current;
-	while (current != NULL) {
-		if (current->filename == filename) {
-			previous->next = current->next;
-			if (current == list->head) {
-				list->head = current->next;
-			}
-
-			free(current);
-			return;
-		}
-
-		previous = current;
-		current = current->next;
 	}
 }
 
@@ -418,7 +395,7 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 				}
 			}
 
-			Remove(current->filename, list);	//	Usuń z listy
+			RemoveAt(current, list);	//	Usuń z listy
 			
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
@@ -641,6 +618,15 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 				return -1;
 			}
 
+			if (closedir(source) == -1) {
+				syslog(LOG_ERR, "closedir(): \"%s\" (%s)", srcPath, strerror(errno));
+				return -1;
+			}
+
+			DestroyList(srcDirFiles);
+			DestroyList(destDirFiles);
+			DestroyList(srcDirectories);
+
 			return 0;
 		}
 		else {
@@ -697,7 +683,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
 		if (result == 0) {   //  Jeżeli został usunięty
 			nodePtr = current->next;
-			Remove(current->filename, srcDirFiles);	//  Usuń z listy
+			RemoveAt(current, srcDirFiles);	//	Usuń z listy	
 			current = nodePtr;
 		}
 		else if (result == -1) { //  Jeżeli wystąpił błąd
@@ -815,7 +801,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	Daemonize();  
+	// Daemonize();  
 
 	syslog(LOG_INFO, "%s started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB.",
 		appName,
@@ -828,7 +814,7 @@ int main(int argc, char *const argv[]) {
 		syslog(LOG_INFO, "Synchronizing directories \"%s\" and \"%s\".", srcPath, destPath);
 		
 		if (SynchronizeDirectories(srcPath, destPath) == -1) {
-			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process has been terminated.");
+			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process terminated.");
 			exit(EXIT_FAILURE);
 		}
 
