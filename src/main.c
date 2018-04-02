@@ -19,7 +19,7 @@
 #define BUFFER_SIZE 131072
 #define MAX_SLEEP_TIME 86400
 
-int fileSizeThreshold = 4096;
+int fileSizeThreshold = 1048576;
 int sleepInterval = 300;
 bool recursiveSearch = false;
 
@@ -174,7 +174,7 @@ int MmapCopy(const char *srcPath, const char *destPath) {
 		return -1;
 	}
 
-	if (memcpy(destAddress, srcAddress, fileSize) == NULL) { //  Skopiuj zawartość odwzorowań
+	if (memcpy(destAddress, srcAddress, fileSize) == NULL) { //  Skopiuj zawartość odwzorowania pliku źródłowego do miejsca odwzorowania pliku docelowego
 		syslog(LOG_ERR, "memcpy(): \"%s\" to \"%s\" (%s)", srcPath, destPath, strerror(errno));
 		return -1;
 	}
@@ -432,7 +432,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 		return -1;
 	}
 
-	/*Odczytaj zawartość katalogu*/
+	/*Odczytaj zawartość katalogu źródłowego*/
 	while ((srcFileInfo = readdir(source)) != NULL) {
 		if (strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
 			continue;
@@ -561,7 +561,7 @@ void Daemonize() {
 	for (int i = 0; i < sysconf(_SC_OPEN_MAX); i++) {   //  Zamknij wszystkie deskryptory
 		tmp = close(i);
 
-		if (errno == EBADF) {	// Jeżeli był to zły dekryptor to wyjdź z pętli (zamknięto wszystkie deskryptory)
+		if (errno == EBADF) {	// Jeżeli był to zły dekryptor to wyjdź z pętli (oznacza to, że zamknięto wszystkie deskryptory)
 			break;
 		}
 
