@@ -19,7 +19,7 @@
 #define BUFFER_SIZE 131072
 #define MAX_SLEEP_TIME 86400
 
-int fileSizeThreshold = 1048576;
+size_t fileSizeThreshold = 1048576;
 int sleepInterval = 300;
 bool recursiveSearch = false;
 
