@@ -54,7 +54,7 @@ List *InitList() {
 void Append(char *filename, List *list) {
 	Node *current = NULL;
 	if (list->head == NULL) {
-		list->head = CreateNode(filename);
+		list->head = CreateNode(filename);		
 	}
 	else {
 		current = list->head;
@@ -71,13 +71,13 @@ int Contains(List *list, char *name) {
 	Node *current = list->head;
 	while (current != NULL) {
 		if (strcmp(current->filename, name) == 0) {
-			return 1;
+			return 0;
 		}
 
 		current = current->next;
 	}
 
-	return -1;
+	return 1;
 }
 
 /*Funkcja niszczy liste list i dealokuje pamięć*/
@@ -317,7 +317,8 @@ int Copy(const char *srcPath, const char *destPath) {
 
 /*Funkcja dołącza nazwę pliku filename do ściezki path*/
 char *AppendToPath(const char *path, const char *filename) {
-	char *newPath = malloc(PATH_MAX * sizeof(char));
+	char *newPath = malloc(2 + strlen(path) + strlen(filename));
+	
 	if (sprintf(newPath, "%s/%s", path, filename) < 0) {
 		syslog(LOG_ERR, "sprintf(): Could not append \"%s\" to \"%s\".", filename, path);
 		return NULL;
@@ -407,7 +408,6 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 		if (strcmp(current->filename, filename) == 0) {  //  Jeżeli w liście istnieje plik o nazwie filename 
 			fullSrcFilePath = AppendToPath(srcPath, filename);
 			fullDestFilePath = AppendToPath(destPath, filename);
-
 			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == 1) {    //  Jeżeli plik źródłowy ma późniejszą date modyfikacji
 				if (Copy(fullSrcFilePath, fullDestFilePath) == -1) { //  To skopiuj
 					syslog(LOG_ERR, "Copy(): Could not copy \"%s\" to \"%s\".", fullSrcFilePath, fullDestFilePath);
@@ -658,18 +658,18 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	/*Wczytaj nazwy plików z folderu źródłowego do listy srcDirFiles*/
 	while ((srcFileInfo = readdir(source)) != NULL) {
-		if (strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
-			continue;
-		}
-
 		if (srcFileInfo->d_type == DT_REG) {  //  Jeżeli jest zwykłym plikiem
 			Append(srcFileInfo->d_name, srcDirFiles);   //  Dołącz do listy
 		}
 		else if (srcFileInfo->d_type == DT_DIR && recursiveSearch) { //  Jeżeli jest katalogiem i włączona jest opcja rekursywnej synchronizacji
+			if (strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
+				continue;
+			}
+
 			Append(srcFileInfo->d_name, srcDirectories);    //  Dołącz do listy
 
-			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
-			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
+			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);		
+			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);			
 			if (SynchronizeDirectories(newSrcPath, newDestPath) == -1) { //  Synchronizuj podkatalogi
 				syslog(LOG_ERR, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\".", newSrcPath, newDestPath);
 				return -1;
@@ -677,19 +677,25 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		}
 	}
 
+	Node *dupa = srcDirFiles->head;
+	while(dupa != NULL){
+		printf("%s\n", dupa->filename);
+		dupa = dupa->next;
+	}
+
 	/*Wczytaj nazwy plików z folderu docelowego do listy destDirFiles*/
 	while ((destFileInfo = readdir(destination)) != NULL) {
 		if (destFileInfo->d_type == DT_REG) {  //  Jeżeli jest zwykłym plikiem
 			Append(destFileInfo->d_name, destDirFiles); //  Dołącz do listy
 		}
-		else if (destFileInfo->d_type == DT_DIR && recursiveSearch) {   // Jeżeli jest katalogiem
+		else if (destFileInfo->d_type == DT_DIR && recursiveSearch) {   // Jeżeli jest katalogiem i włączona jest opcja rekursywnej synchronizacji
 			if (strcmp(destFileInfo->d_name, ".") == 0 || strcmp(destFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
 				continue;
 			}
-
-			if (Contains(srcDirectories, destFileInfo->d_name) == -1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
-				syslog(LOG_INFO, "destPath=\"%s\", srcFileInfo->d_name=\"%s\".", destPath, srcFileInfo->d_name);
-				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
+		
+			if (Contains(srcDirectories, destFileInfo->d_name) == 1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
+				newDestPath = AppendToPath(destPath, destFileInfo->d_name);
+				
 				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
 					syslog(LOG_ERR, "RemoveDirectory(): Could not remove \"%s\".", newDestPath);
 					return -1;
@@ -705,7 +711,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
 		if (result == 0) {   //  Jeżeli został usunięty
 			nodePtr = current->next;
-			//RemoveAt(current, srcDirFiles);	//	Usuń z listy	
+			// RemoveAt(current, srcDirFiles);	//	Usuń z listy	
 			Remove(current->filename, srcDirFiles);
 			current = nodePtr;
 		}
@@ -804,6 +810,11 @@ int main(int argc, char *const argv[]) {
 		}
 	}
 
+	if(strcmp(srcPath, destPath) == 0) {
+		printf("Source and destiantion paths are the same.\n");
+		exit(EXIT_FAILURE);
+	}
+
 	if (stat(srcPath, &srcDirInfo) == -1) {  //  Pobranie informacji o katalogu srcPath
 		printf("\"%s\" does not exist.\n", srcPath);
 		exit(EXIT_FAILURE);
@@ -824,7 +835,7 @@ int main(int argc, char *const argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	Daemonize();
+	// Daemonize();
 
 	syslog(LOG_INFO, "%s started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%ldB.",
 		appName,
