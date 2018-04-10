@@ -105,6 +105,26 @@ void RemoveAt(Node *node, List *list) {
 	free(current);
 	return;
 }
+
+/*Funkcja usuwająca element z listy list, zawierający filename*/
+void Remove(char *filename, List *list) {
+	Node *current = list->head;
+	Node *previous = current;
+	while (current != NULL) {
+		if (current->filename == filename) {
+			previous->next = current->next;
+			if (current == list->head) {
+				list->head = current->next;
+			}
+
+			free(current);
+			return;
+		}
+
+		previous = current;
+		current = current->next;
+	}
+}
 /*LISTA*/
 
 /*Funkcja, która pobiera informacje o pliku path i zwraca wskaźnik na struct stat*/
@@ -395,7 +415,8 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 				}
 			}
 
-			RemoveAt(current, list);	//	Usuń z listy
+			// RemoveAt(current, list);	//	Usuń z listy
+			Remove(current->filename, list);
 
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
@@ -667,6 +688,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			}
 
 			if (Contains(srcDirectories, destFileInfo->d_name) == -1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
+				syslog(LOG_INFO, "destPath=\"%s\", srcFileInfo->d_name=\"%s\".", destPath, srcFileInfo->d_name);
 				newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
 				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
 					syslog(LOG_ERR, "RemoveDirectory(): Could not remove \"%s\".", newDestPath);
@@ -683,7 +705,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
 		if (result == 0) {   //  Jeżeli został usunięty
 			nodePtr = current->next;
-			RemoveAt(current, srcDirFiles);	//	Usuń z listy	
+			//RemoveAt(current, srcDirFiles);	//	Usuń z listy	
+			Remove(current->filename, srcDirFiles);
 			current = nodePtr;
 		}
 		else if (result == -1) { //  Jeżeli wystąpił błąd
@@ -803,7 +826,7 @@ int main(int argc, char *const argv[]) {
 
 	Daemonize();
 
-	syslog(LOG_INFO, "%s started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%dB.",
+	syslog(LOG_INFO, "%s started, RecursiveSearch=%s, sleepInterval=%ds, fileSizeThreshold=%ldB.",
 		appName,
 		recursiveSearch ? "true" : "false",
 		sleepInterval,
