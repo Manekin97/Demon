@@ -618,7 +618,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	List *srcDirFiles = InitList();
 	List *destDirFiles = InitList();
-	List *srcDirectories = InitList();
+	List *srcDirectories = InitList();	
 
 	char *newSrcPath = NULL;
 	char *newDestPath = NULL;
@@ -660,6 +660,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	while ((srcFileInfo = readdir(source)) != NULL) {
 		if (srcFileInfo->d_type == DT_REG) {  //  Jeżeli jest zwykłym plikiem
 			Append(srcFileInfo->d_name, srcDirFiles);   //  Dołącz do listy
+			
 		}
 		else if (srcFileInfo->d_type == DT_DIR && recursiveSearch) { //  Jeżeli jest katalogiem i włączona jest opcja rekursywnej synchronizacji
 			if (strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
@@ -668,20 +669,14 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 			Append(srcFileInfo->d_name, srcDirectories);    //  Dołącz do listy
 
-			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);		
-			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);			
+			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
+			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);				
 			if (SynchronizeDirectories(newSrcPath, newDestPath) == -1) { //  Synchronizuj podkatalogi
 				syslog(LOG_ERR, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\".", newSrcPath, newDestPath);
 				return -1;
 			}
 		}
-	}
-
-	Node *dupa = srcDirFiles->head;
-	while(dupa != NULL){
-		printf("%s\n", dupa->filename);
-		dupa = dupa->next;
-	}
+	}	
 
 	/*Wczytaj nazwy plików z folderu docelowego do listy destDirFiles*/
 	while ((destFileInfo = readdir(destination)) != NULL) {
