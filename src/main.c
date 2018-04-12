@@ -698,9 +698,10 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 					syslog(LOG_ERR, "RemoveDirectory(): Could not remove \"%s\".", newDestPath);
 					return -1;
 				}
+				
+				free(newDestPath);
 			}
 
-			free(newDestPath);
 		}
 	}
 
@@ -849,7 +850,8 @@ int main(int argc, char *const argv[]) {
 			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process terminated.");
 			exit(EXIT_FAILURE);
 		}
-
+		
+		syslog(LOG_INFO, "Directories synchronized");	
 		syslog(LOG_INFO, "%s went to sleep for %d seconds.", appName, sleepInterval);
 		sleep(sleepInterval);
 	}
