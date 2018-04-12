@@ -54,7 +54,7 @@ List *InitList() {
 void Append(char *filename, List *list) {
 	Node *current = NULL;
 	if (list->head == NULL) {
-		list->head = CreateNode(filename);		
+		list->head = CreateNode(filename);
 	}
 	else {
 		current = list->head;
@@ -276,7 +276,7 @@ int RegularCopy(const char *srcPath, const char *destPath) {
 /*Funkcja kopiująca plik srcPath do destPath, na podstawie rozmiaru pliku decyduje w jaki sposób plik zostanie skopiowany*/
 int Copy(const char *srcPath, const char *destPath) {
 	struct stat *srcFileInfo = GetFileInfo(srcPath);
-	if(srcFileInfo == NULL) {
+	if (srcFileInfo == NULL) {
 		syslog(LOG_ERR, "GetFileInfo(): Could not get file info \"%s\".", srcPath);
 		return -1;
 	}
@@ -302,7 +302,7 @@ int Copy(const char *srcPath, const char *destPath) {
 /*Funkcja dołącza nazwę pliku filename do ściezki path*/
 char *AppendToPath(const char *path, const char *filename) {
 	char *newPath = malloc(2 + strlen(path) + strlen(filename));
-	
+
 	if (sprintf(newPath, "%s/%s", path, filename) < 0) {
 		syslog(LOG_ERR, "sprintf(): Could not append \"%s\" to \"%s\".", filename, path);
 		return NULL;
@@ -319,15 +319,15 @@ int CopyAllFilesFromList(List *list, const char *srcDir, const char *destDir) {
 	Node *current = list->head;
 	while (current != NULL) {
 		fullSrcFilePath = AppendToPath(srcDir, current->filename);
-		if(fullSrcFilePath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, srcDir);	
-			return -1;		
+		if (fullSrcFilePath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, srcDir);
+			return -1;
 		}
 
 		fullDestFilePath = AppendToPath(destDir, current->filename);
-		if(fullDestFilePath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, destDir);	
-			return -1;		
+		if (fullDestFilePath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, destDir);
+			return -1;
 		}
 
 		if (Copy(fullSrcFilePath, fullDestFilePath) == -1) {
@@ -350,9 +350,9 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 	Node *current = list->head;
 	while (current != NULL) {
 		fullPath = AppendToPath(path, current->filename);
-		if(fullPath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, path);	
-			return -1;		
+		if (fullPath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", current->filename, path);
+			return -1;
 		}
 
 		if (remove(fullPath) == -1) {
@@ -361,7 +361,7 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 		}
 
 		syslog(LOG_INFO, "File \"%s\" has been removed.", fullPath);
-		free(fullPath);		
+		free(fullPath);
 		current = current->next;
 	}
 
@@ -374,14 +374,14 @@ int CompareModTime(const char *srcPath, const char *destPath) {
 	struct stat *destFileInfo = NULL;
 
 	srcFileInfo = GetFileInfo(srcPath);
-	if(srcFileInfo == NULL) {
+	if (srcFileInfo == NULL) {
 		syslog(LOG_ERR, "GetFileInfo(): Could not get file info \"%s\".", srcPath);
 		return -1;
 	}
 	destFileInfo = GetFileInfo(destPath);
-	if(destFileInfo == NULL) {
+	if (destFileInfo == NULL) {
 		syslog(LOG_ERR, "GetFileInfo(): Could not get file info \"%s\".", destPath);
-		return -1;		
+		return -1;
 	}
 
 	if (srcFileInfo->st_mtime > destFileInfo->st_mtime) {   //  Jeżeli plik źródłowy był modyfikowany później niz plik docelowy
@@ -413,15 +413,15 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 	while (current != NULL) {
 		if (strcmp(current->filename, filename) == 0) {  //  Jeżeli w liście istnieje plik o nazwie filename 
 			fullSrcFilePath = AppendToPath(srcPath, filename);
-			if(fullSrcFilePath == NULL) {
-				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", filename, srcPath);	
-				return -1;		
+			if (fullSrcFilePath == NULL) {
+				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", filename, srcPath);
+				return -1;
 			}
 
 			fullDestFilePath = AppendToPath(destPath, filename);
-			if(fullSrcFilePath == NULL) {
-				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", filename, destPath);	
-				return -1;		
+			if (fullSrcFilePath == NULL) {
+				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", filename, destPath);
+				return -1;
 			}
 
 			if (CompareModTime(fullSrcFilePath, fullDestFilePath) == 1) {    //  Jeżeli plik źródłowy ma późniejszą date modyfikacji
@@ -451,7 +451,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 	DIR *source = NULL;
 
 	struct stat *fileInfo = GetFileInfo(srcPath);
-	if(srcFileInfo == NULL) {
+	if (srcFileInfo == NULL) {
 		syslog(LOG_ERR, "GetFileInfo(): Could not get file info \"%s\".", srcPath);
 		return -1;
 	}
@@ -479,15 +479,15 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 		}
 
 		newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
-		if(newSrcPath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, srcPath);	
-			return -1;		
+		if (newSrcPath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, srcPath);
+			return -1;
 		}
 
 		newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
-		if(newDestPath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, destPath);	
-			return -1;		
+		if (newDestPath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, destPath);
+			return -1;
 		}
 
 		if (srcFileInfo->d_type == DT_REG) { //  Jeżeli jest zwykłym plikiem
@@ -538,9 +538,9 @@ int RemoveDirectory(const char *path) {
 		}
 
 		newPath = AppendToPath(path, fileInfo->d_name);
-		if(newPath == NULL) {
-			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", fileInfo->d_name, path);	
-			return -1;		
+		if (newPath == NULL) {
+			syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", fileInfo->d_name, path);
+			return -1;
 		}
 
 		if (fileInfo->d_type == DT_REG) {    //  Jeżeli jest plikiem
@@ -651,7 +651,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	List *srcDirFiles = InitList();
 	List *destDirFiles = InitList();
-	List *srcDirectories = InitList();	
+	List *srcDirectories = InitList();
 
 	char *newSrcPath = NULL;
 	char *newDestPath = NULL;
@@ -660,14 +660,14 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 	source = opendir(srcPath);
 	if (!source) {
-		if(errno == EACCES) {
+		if (errno == EACCES) {
 			syslog(LOG_ERR, "opendir(): \"%s\" (%s). The directory will be omitted", srcPath, strerror(errno));
 
 			DestroyList(srcDirFiles);
 			DestroyList(destDirFiles);
 			DestroyList(srcDirectories);
 
-			return 1;			
+			return 1;
 		}
 
 		syslog(LOG_ERR, "opendir(): \"%s\" (%s)", srcPath, strerror(errno));
@@ -693,7 +693,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 
 			return 0;
 		}
-		else if(errno == EACCES) {
+		else if (errno == EACCES) {
 			syslog(LOG_ERR, "opendir(): \"%s\" (%s). The directory will be omitted", srcPath, strerror(errno));
 
 			DestroyList(srcDirFiles);
@@ -713,7 +713,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	while ((srcFileInfo = readdir(source)) != NULL) {
 		if (srcFileInfo->d_type == DT_REG) {  //  Jeżeli jest zwykłym plikiem
 			Append(srcFileInfo->d_name, srcDirFiles);   //  Dołącz do listy
-			
+
 		}
 		else if (srcFileInfo->d_type == DT_DIR && recursiveSearch) { //  Jeżeli jest katalogiem i włączona jest opcja rekursywnej synchronizacji
 			if (strcmp(srcFileInfo->d_name, ".") == 0 || strcmp(srcFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
@@ -723,15 +723,15 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			Append(srcFileInfo->d_name, srcDirectories);    //  Dołącz do listy
 
 			newSrcPath = AppendToPath(srcPath, srcFileInfo->d_name);
-			if(newSrcPath == NULL) {
-				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, srcPath);	
-				return -1;		
+			if (newSrcPath == NULL) {
+				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, srcPath);
+				return -1;
 			}
 
-			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);	
-			if(newDestPath == NULL) {
-				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, destPath);	
-				return -1;		
+			newDestPath = AppendToPath(destPath, srcFileInfo->d_name);
+			if (newDestPath == NULL) {
+				syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", srcFileInfo->d_name, destPath);
+				return -1;
 			}
 
 			if (SynchronizeDirectories(newSrcPath, newDestPath) == -1) { //  Synchronizuj podkatalogi
@@ -740,9 +740,9 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			}
 
 			free(newSrcPath);
-			free(newDestPath);			
+			free(newDestPath);
 		}
-	}	
+	}
 
 	/*Wczytaj nazwy plików z folderu docelowego do listy destDirFiles*/
 	while ((destFileInfo = readdir(destination)) != NULL) {
@@ -753,19 +753,19 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 			if (strcmp(destFileInfo->d_name, ".") == 0 || strcmp(destFileInfo->d_name, "..") == 0) {   //  Pomiń katalogi "." i ".."
 				continue;
 			}
-		
+
 			if (Contains(srcDirectories, destFileInfo->d_name) == 1) {  //  Jeżeli ten podkatalog nie znajduje się w katalogu źródłowym
 				newDestPath = AppendToPath(destPath, destFileInfo->d_name);
-				if(newDestPath == NULL) {
-					syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", destFileInfo->d_name, destPath);	
-					return -1;		
+				if (newDestPath == NULL) {
+					syslog(LOG_ERR, "AppendToPath(): Could not append \"%s\" to \"%s\".", destFileInfo->d_name, destPath);
+					return -1;
 				}
-				
+
 				if (RemoveDirectory(newDestPath) == -1) {   // To usuń go
 					syslog(LOG_ERR, "RemoveDirectory(): Could not remove \"%s\".", newDestPath);
 					return -1;
 				}
-				
+
 				free(newDestPath);
 			}
 
@@ -876,7 +876,7 @@ int main(int argc, char *const argv[]) {
 		}
 	}
 
-	if(strcmp(srcPath, destPath) == 0) {
+	if (strcmp(srcPath, destPath) == 0) {
 		printf("Source and destiantion paths are the same.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -921,8 +921,8 @@ int main(int argc, char *const argv[]) {
 			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process terminated.");
 			exit(EXIT_FAILURE);
 		}
-		
-		syslog(LOG_INFO, "Directories synchronized successfully.");	
+
+		syslog(LOG_INFO, "Directories synchronized successfully.");
 		syslog(LOG_INFO, "%s went to sleep for %d seconds.", appName, sleepInterval);
 		sleep(sleepInterval);
 	}
