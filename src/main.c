@@ -451,7 +451,7 @@ int CopyDirectory(const char *srcPath, const char *destPath) {
 	DIR *source = NULL;
 
 	struct stat *fileInfo = GetFileInfo(srcPath);
-	if (srcFileInfo == NULL) {
+	if (fileInfo == NULL) {
 		syslog(LOG_ERR, "GetFileInfo(): Could not get file info \"%s\".", srcPath);
 		return -1;
 	}
