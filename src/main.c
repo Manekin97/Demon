@@ -363,10 +363,10 @@ int RemoveAllFilesFromList(List *list, const char *path) {
 		}
 
 		syslog(LOG_INFO, "File \"%s\" has been removed.", fullPath);
+		free(fullPath);		
 		current = current->next;
 	}
 
-	free(fullPath);
 	return 0;
 }
 
@@ -415,8 +415,8 @@ int FindAndCopy(List *list, const char *srcPath, const char *destPath, char *fil
 				}
 			}
 
-			// RemoveAt(current, list);	//	Usuń z listy
-			Remove(current->filename, list);
+			RemoveAt(current, list);	//	Usuń z listy
+			// Remove(current->filename, list);
 
 			free(fullSrcFilePath);
 			free(fullDestFilePath);
@@ -522,6 +522,8 @@ int RemoveDirectory(const char *path) {
 				return -1;
 			}
 		}
+
+		free(newPath);
 	}
 
 	if (remove(path) == -1) {    //  Usuń katalog
@@ -537,8 +539,6 @@ int RemoveDirectory(const char *path) {
 	}
 
 	free(fileInfo);
-	free(newPath);
-
 	return 0;
 }
 
@@ -675,6 +675,9 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 				syslog(LOG_ERR, "SynchronizeDirectories(): Could not synchronize \"%s\" and \"%s\".", newSrcPath, newDestPath);
 				return -1;
 			}
+
+			free(newSrcPath);
+			free(newDestPath);			
 		}
 	}	
 
@@ -706,8 +709,8 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
 		if (result == 0) {   //  Jeżeli został usunięty
 			nodePtr = current->next;
-			// RemoveAt(current, srcDirFiles);	//	Usuń z listy	
-			Remove(current->filename, srcDirFiles);
+			RemoveAt(current, srcDirFiles);	//	Usuń z listy	
+			// Remove(current->filename, srcDirFiles);
 			current = nodePtr;
 		}
 		else if (result == -1) { //  Jeżeli wystąpił błąd
@@ -745,8 +748,6 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 	DestroyList(srcDirFiles);
 	DestroyList(destDirFiles);
 	DestroyList(srcDirectories);
-	free(newSrcPath);
-	free(newDestPath);
 
 	return 0;
 }
@@ -846,7 +847,7 @@ int main(int argc, char *const argv[]) {
 			syslog(LOG_ERR, "SynchronizeDirectories(): An error has occured. Process terminated.");
 			exit(EXIT_FAILURE);
 		}
-
+		exit(EXIT_SUCCESS);
 		syslog(LOG_INFO, "%s went to sleep for %d seconds.", appName, sleepInterval);
 		sleep(sleepInterval);
 	}
