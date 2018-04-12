@@ -779,8 +779,7 @@ int SynchronizeDirectories(const char *srcPath, const char *destPath) {
 		result = FindAndCopy(destDirFiles, srcPath, destPath, current->filename);
 		if (result == 0) {   //  Jeżeli został usunięty
 			nodePtr = current->next;
-			RemoveAt(current, srcDirFiles);	//	Usuń z listy	
-			// Remove(current->filename, srcDirFiles);
+			RemoveAt(current, srcDirFiles);	//	Usuń z listy
 			current = nodePtr;
 		}
 		else if (result == -1) { //  Jeżeli wystąpił błąd
